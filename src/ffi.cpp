@@ -2001,22 +2001,16 @@ std::unique_ptr<TopoDS_Shape> read_step_stream(RustReader& reader) {
     RustReadStreambuf sbuf(reader);
     std::istream is(&sbuf);
 
-    // OCCT 7.x bug workaround: STEPControl_Reader::~STEPControl_Reader()
-    // crashes when the reader was constructed on the stack and destroyed
-    // after a successful TransferRoots(). Allocating on the heap and never
-    // freeing avoids the destructor path entirely. The leaked memory is
-    // bounded (one reader per STEP read) and accepted as a known cost.
-    auto* step_reader = new STEPControl_Reader();
-    IFSelect_ReturnStatus status = step_reader->ReadStream("stream", is);
+    STEPControl_Reader step_reader;
+    IFSelect_ReturnStatus status = step_reader.ReadStream("stream", is);
 
     if (status != IFSelect_RetDone) {
         return nullptr;
     }
 
-    step_reader->TransferRoots(Message_ProgressRange());
-    // step_reader is intentionally leaked — see comment above.
+    step_reader.TransferRoots(Message_ProgressRange());
     return std::make_unique<TopoDS_Shape>(
-        try_sew_orphan_faces(step_reader->OneShape(), nullptr));
+        try_sew_orphan_faces(step_reader.OneShape(), nullptr));
 }
 
 bool write_step_stream(const TopoDS_Shape& shape, RustWriter& writer) {
