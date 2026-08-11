@@ -16,6 +16,10 @@ pub enum Error {
 	/// Triangulation/meshing failed.
 	TriangulationFailed,
 
+	/// A display-only STEP body exceeded the fixed resource budget for the
+	/// selected visual tessellation preset.
+	VisualMeshBudgetExceeded { vertices: usize, triangles: usize, max_vertices: usize, max_triangles: usize },
+
 	/// Boolean operation (fuse/cut/common) failed.
 	BooleanOperationFailed,
 
@@ -108,6 +112,7 @@ impl std::fmt::Display for Error {
 			Error::StepWriteFailed => write!(f, "STEP write failed"),
 			Error::BrepWriteFailed => write!(f, "BRep write failed"),
 			Error::TriangulationFailed => write!(f, "Triangulation failed"),
+			Error::VisualMeshBudgetExceeded { vertices, triangles, max_vertices, max_triangles } => write!(f, "Visual STEP mesh exceeds its resource budget: {vertices} vertices and {triangles} triangles (limits: {max_vertices} vertices and {max_triangles} triangles)"),
 			Error::BooleanOperationFailed => write!(f, "Boolean operation failed"),
 			Error::OneFailed(n) => write!(f, "Expected exactly one resulting Solid, got {}", n),
 			Error::CleanFailed => write!(f, "Shape clean failed"),

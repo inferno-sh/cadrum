@@ -86,6 +86,14 @@ pub struct Solid {
 }
 
 impl Solid {
+	/// Read STEP geometry and exact source-entity topology bindings.
+	///
+	/// Unlike [`Solid::read_step`], this also exposes the transfer-process
+	/// correspondence for supported solid and face entities.
+	pub fn read_step_with_bindings<R: std::io::Read>(reader: &mut R) -> Result<super::io::StepImport, Error> {
+		super::io::read_step_with_bindings(reader)
+	}
+
 	/// Create a `Solid` from a `TopoDS_Shape`.
 	///
 	/// # Panics

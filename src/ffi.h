@@ -30,7 +30,32 @@ struct MeshData;
 // through XCAF (`read_step_color_stream` etc.) instead.
 #ifndef FEATURE_COLOR
 std::unique_ptr<TopoDS_Shape> read_step_stream(RustReader& reader);
+std::unique_ptr<TopoDS_Shape> read_step_bound_stream(
+    RustReader& reader,
+    rust::Vec<uint32_t>& out_entity_numbers,
+    rust::Vec<uint8_t>& out_entity_kinds,
+    rust::Vec<uint8_t>& out_topology_kinds,
+    rust::Vec<uint8_t>& out_binding_statuses,
+    rust::Vec<uint64_t>& out_tshape_ids,
+    rust::Vec<uint64_t>& out_occurrence_tshape_ids,
+    rust::Vec<double>& out_occurrence_matrices,
+    uint32_t& out_identless_entities);
 bool write_step_stream(const TopoDS_Shape& shape, RustWriter& writer);
+#endif
+
+#ifdef FEATURE_COLOR
+std::unique_ptr<TopoDS_Shape> read_step_bound_color_stream(
+    RustReader& reader,
+    rust::Vec<uint64_t>& out_ids,
+    rust::Vec<float>& out_rgb,
+    rust::Vec<uint32_t>& out_entity_numbers,
+    rust::Vec<uint8_t>& out_entity_kinds,
+    rust::Vec<uint8_t>& out_topology_kinds,
+    rust::Vec<uint8_t>& out_binding_statuses,
+    rust::Vec<uint64_t>& out_tshape_ids,
+    rust::Vec<uint64_t>& out_occurrence_tshape_ids,
+    rust::Vec<double>& out_occurrence_matrices,
+    uint32_t& out_identless_entities);
 #endif
 // `out_consumed` = length of the BinTools payload, where Rust's color trailer
 // begins. Written ONLY on success; on failure nullptr comes back and it is untouched.

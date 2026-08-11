@@ -10,6 +10,8 @@ pub mod occt;
 // #[cfg(feature = "pure")]
 // pub mod pure;
 #[cfg(not(feature = "pure"))]
+pub use occt::io::{StepEntityKind, StepImport, StepSolidOccurrence, StepTopologyBinding, StepTopologyBindingTarget, StepTopologyKind, StepTopologyUnboundReason, StepVisualBody, StepVisualFace, StepVisualTessellation};
+#[cfg(not(feature = "pure"))]
 pub use occt::{edge::Edge, face::Face, solid::Solid};
 pub(crate) mod traits;
 // wasm32: no-op WASI/`env` import shims (self-contained wasm). Kept alive by the

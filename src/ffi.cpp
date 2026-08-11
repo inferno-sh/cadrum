@@ -91,15 +91,24 @@
 #include <Precision.hxx>
 
 // --- I/O (BREP / STEP / progress) ---
-// STEP-specific headers are only needed by the non-color STEP path
-// (`read_step_stream` / `write_step_stream`); with color, STEP routes
-// through XCAF in the FEATURE_COLOR section below.
 #include <BinTools.hxx>
-#ifndef FEATURE_COLOR
 #include <STEPControl_Reader.hxx>
+#include <StepData_StepModel.hxx>
+#include <StepShape_AdvancedFace.hxx>
+#include <StepShape_BrepWithVoids.hxx>
+#include <StepShape_FacetedBrep.hxx>
+#include <StepShape_FacetedBrepAndBrepWithVoids.hxx>
+#include <StepShape_ManifoldSolidBrep.hxx>
+#include <Transfer_Binder.hxx>
+#include <Transfer_TransientProcess.hxx>
+#include <TransferBRep_ShapeBinder.hxx>
+#include <TransferBRep_ShapeListBinder.hxx>
+#include <XSControl_TransferReader.hxx>
+#include <XSControl_WorkSession.hxx>
+#ifndef FEATURE_COLOR
 #include <STEPControl_Writer.hxx>
-#include <Message_ProgressRange.hxx>
 #endif
+#include <Message_ProgressRange.hxx>
 #include <Message.hxx>
 
 // --- C++ standard library ---
@@ -251,7 +260,8 @@ std::unique_ptr<TopoDS_Shape> deep_copy(const TopoDS_Shape& shape) {
 //     最厳設定で十分。緩めると意図しない縫合リスクが増す。
 static TopoDS_Shape try_sew_orphan_faces(
     const TopoDS_Shape& compound,
-    std::unordered_map<uint64_t, std::array<float, 3>>* colorMap)
+    std::unordered_map<uint64_t, std::array<float, 3>>* colorMap,
+    std::unordered_map<const TopoDS_TShape*, const TopoDS_TShape*>* faceRemap)
 {
     // 1. 既存 Solid と配下 face TShape* 集合を回収
     std::unordered_set<const TopoDS_TShape*> in_solid;
@@ -291,21 +301,197 @@ static TopoDS_Shape try_sew_orphan_faces(
         if (mk.IsDone()) bb.Add(new_compound, mk.Solid());
     }
 
-    // 5. colormap キー remap (color path のみ)
-    if (colorMap) {
+    // 5. Remap colors and source-face identity across sewing.
+    if (colorMap || faceRemap) {
         for (const auto& old_face : orphan_faces) {
             uint64_t old_id = reinterpret_cast<uint64_t>(old_face.TShape().get());
-            auto it = colorMap->find(old_id);
-            if (it == colorMap->end()) continue;
-            if (sewer.IsModified(old_face)) {
-                uint64_t new_id = reinterpret_cast<uint64_t>(
-                    sewer.Modified(old_face).TShape().get());
+            if (!sewer.IsModified(old_face)) continue;
+            const TopoDS_Shape modified = sewer.Modified(old_face);
+            if (modified.IsNull()) continue;
+            if (faceRemap) {
+                (*faceRemap)[old_face.TShape().get()] = modified.TShape().get();
+            }
+            if (colorMap) {
+                auto it = colorMap->find(old_id);
+                if (it == colorMap->end()) continue;
+                uint64_t new_id = reinterpret_cast<uint64_t>(modified.TShape().get());
                 (*colorMap)[new_id] = it->second;
             }
         }
     }
 
     return new_compound;
+}
+
+static std::vector<TopoDS_Shape> collect_shape_results(
+    const occ::handle<Transfer_TransientProcess>& process,
+    const occ::handle<Standard_Transient>& entity)
+{
+    std::vector<TopoDS_Shape> shapes;
+    for (auto binder = process->Find(entity); !binder.IsNull();
+         binder = binder->NextResult()) {
+        const auto shape_binder =
+            occ::handle<TransferBRep_ShapeBinder>::DownCast(binder);
+        if (!shape_binder.IsNull()) {
+            shapes.push_back(shape_binder->Result());
+            continue;
+        }
+        const auto list_binder =
+            occ::handle<TransferBRep_ShapeListBinder>::DownCast(binder);
+        if (list_binder.IsNull()) continue;
+        for (int index = 1; index <= list_binder->NbShapes(); ++index) {
+            shapes.push_back(list_binder->Shape(index));
+        }
+    }
+    return shapes;
+}
+
+// Kinds: entities 1=MANIFOLD_SOLID_BREP, 2=BREP_WITH_VOIDS, 3=ADVANCED_FACE,
+// 4=FACETED_BREP, 5=FACETED_BREP_AND_BREP_WITH_VOIDS;
+// topology 1=SOLID, 2=FACE. Physical ids come from IdentLabel(), not model rank.
+static TopoDS_Shape build_step_bodies_and_bindings(
+    const STEPControl_Reader& reader,
+    const TopoDS_Shape& imported,
+    const std::unordered_map<const TopoDS_TShape*, const TopoDS_TShape*>& face_remap,
+    rust::Vec<uint32_t>& out_entity_numbers,
+    rust::Vec<uint8_t>& out_entity_kinds,
+    rust::Vec<uint8_t>& out_topology_kinds,
+    rust::Vec<uint8_t>& out_binding_statuses,
+    rust::Vec<uint64_t>& out_tshape_ids,
+    uint32_t& out_identless_entities)
+{
+    BRep_Builder builder;
+    TopoDS_Compound bodies;
+    builder.MakeCompound(bodies);
+
+    const auto model = reader.StepModel();
+    const auto session = reader.WS();
+    if (model.IsNull() || session.IsNull()) return bodies;
+    const auto transfer_reader = session->TransferReader();
+    if (transfer_reader.IsNull()) return bodies;
+    const auto process = transfer_reader->TransientProcess();
+    if (process.IsNull()) return bodies;
+
+    auto classify = [](const occ::handle<Standard_Transient>& entity,
+                       uint8_t& entity_kind,
+                       uint8_t& topology_kind,
+                       TopAbs_ShapeEnum& expected_shape) {
+        const auto& type = entity->DynamicType();
+        if (type == STANDARD_TYPE(StepShape_ManifoldSolidBrep)) {
+            entity_kind = 1;
+            topology_kind = 1;
+            expected_shape = TopAbs_SOLID;
+        } else if (type == STANDARD_TYPE(StepShape_BrepWithVoids)) {
+            entity_kind = 2;
+            topology_kind = 1;
+            expected_shape = TopAbs_SOLID;
+        } else if (type == STANDARD_TYPE(StepShape_FacetedBrep)) {
+            entity_kind = 4;
+            topology_kind = 1;
+            expected_shape = TopAbs_SOLID;
+        } else if (type == STANDARD_TYPE(StepShape_FacetedBrepAndBrepWithVoids)) {
+            entity_kind = 5;
+            topology_kind = 1;
+            expected_shape = TopAbs_SOLID;
+        } else if (type == STANDARD_TYPE(StepShape_AdvancedFace)) {
+            entity_kind = 3;
+            topology_kind = 2;
+            expected_shape = TopAbs_FACE;
+        } else {
+            return false;
+        }
+        return true;
+    };
+
+    std::unordered_set<const TopoDS_TShape*> body_ids;
+    for (TopExp_Explorer it(imported, TopAbs_SOLID); it.More(); it.Next()) {
+        const TopoDS_Shape body = it.Current();
+        if (!body_ids.insert(body.TShape().get()).second) continue;
+        builder.Add(bodies, body.Located(TopLoc_Location()));
+    }
+
+    std::unordered_set<const TopoDS_TShape*> solid_ids;
+    std::unordered_set<const TopoDS_TShape*> face_ids;
+    for (TopExp_Explorer it(bodies, TopAbs_SOLID); it.More(); it.Next()) {
+        solid_ids.insert(it.Current().TShape().get());
+    }
+    for (TopExp_Explorer it(bodies, TopAbs_FACE); it.More(); it.Next()) {
+        face_ids.insert(it.Current().TShape().get());
+    }
+
+    for (int index = 1; index <= model->NbEntities(); ++index) {
+        const auto entity = model->Value(index);
+        if (entity.IsNull()) continue;
+
+        uint8_t entity_kind = 0;
+        uint8_t topology_kind = 0;
+        TopAbs_ShapeEnum expected_shape = TopAbs_SHAPE;
+        if (!classify(entity, entity_kind, topology_kind, expected_shape)) continue;
+
+        const int entity_number = model->IdentLabel(entity);
+        if (entity_number <= 0) {
+            ++out_identless_entities;
+            continue;
+        }
+        const std::vector<TopoDS_Shape> results =
+            collect_shape_results(process, entity);
+        std::unordered_set<const TopoDS_TShape*> emitted_ids;
+        bool emitted = false;
+        for (const TopoDS_Shape& result : results) {
+            if (result.IsNull() || result.ShapeType() != expected_shape ||
+                !emitted_ids.insert(result.TShape().get()).second) continue;
+            emitted = true;
+            out_entity_numbers.push_back(static_cast<uint32_t>(entity_number));
+            out_entity_kinds.push_back(entity_kind);
+            out_topology_kinds.push_back(topology_kind);
+            const auto& retained_ids =
+                expected_shape == TopAbs_SOLID ? solid_ids : face_ids;
+            const TopoDS_TShape* retained_id = result.TShape().get();
+            if (expected_shape == TopAbs_FACE &&
+                retained_ids.count(retained_id) == 0) {
+                auto remapped = face_remap.find(retained_id);
+                if (remapped != face_remap.end()) retained_id = remapped->second;
+            }
+            if (retained_ids.count(retained_id) == 0) {
+                out_binding_statuses.push_back(3);
+                out_tshape_ids.push_back(0);
+            } else {
+                out_binding_statuses.push_back(1);
+                out_tshape_ids.push_back(
+                    reinterpret_cast<uint64_t>(retained_id));
+            }
+        }
+        if (!emitted) {
+            out_entity_numbers.push_back(static_cast<uint32_t>(entity_number));
+            out_entity_kinds.push_back(entity_kind);
+            out_topology_kinds.push_back(topology_kind);
+            out_binding_statuses.push_back(2);
+            out_tshape_ids.push_back(0);
+        }
+    }
+    return bodies;
+}
+
+static void collect_step_solid_occurrences(
+    const TopoDS_Shape& assembly,
+    rust::Vec<uint64_t>& out_tshape_ids,
+    rust::Vec<double>& out_matrices)
+{
+    for (TopExp_Explorer it(assembly, TopAbs_SOLID); it.More(); it.Next()) {
+        const TopoDS_Shape occurrence = it.Current();
+        out_tshape_ids.push_back(
+            reinterpret_cast<uint64_t>(occurrence.TShape().get()));
+        const gp_Trsf transform = occurrence.Location().Transformation();
+        for (int column = 1; column <= 4; ++column) {
+            for (int row = 1; row <= 4; ++row) {
+                if (row == 4) {
+                    out_matrices.push_back(column == 4 ? 1.0 : 0.0);
+                } else {
+                    out_matrices.push_back(transform.Value(row, column));
+                }
+            }
+        }
+    }
 }
 
 // ==================== Compound Decompose/Compose ====================
@@ -1997,7 +2183,17 @@ bool write_brep_stream(const TopoDS_Shape& shape, RustWriter& writer) {
 
 #ifndef FEATURE_COLOR
 // Plain STEP I/O — used only when FEATURE_COLOR is not defined.
-std::unique_ptr<TopoDS_Shape> read_step_stream(RustReader& reader) {
+static std::unique_ptr<TopoDS_Shape> read_step_impl(
+    RustReader& reader,
+    rust::Vec<uint32_t>* out_entity_numbers,
+    rust::Vec<uint8_t>* out_entity_kinds,
+    rust::Vec<uint8_t>* out_topology_kinds,
+    rust::Vec<uint8_t>* out_binding_statuses,
+    rust::Vec<uint64_t>* out_tshape_ids,
+    rust::Vec<uint64_t>* out_occurrence_tshape_ids,
+    rust::Vec<double>* out_occurrence_matrices,
+    uint32_t* out_identless_entities)
+{
     RustReadStreambuf sbuf(reader);
     std::istream is(&sbuf);
 
@@ -2009,8 +2205,57 @@ std::unique_ptr<TopoDS_Shape> read_step_stream(RustReader& reader) {
     }
 
     step_reader.TransferRoots(Message_ProgressRange());
-    return std::make_unique<TopoDS_Shape>(
-        try_sew_orphan_faces(step_reader.OneShape(), nullptr));
+    const TopoDS_Shape assembly = step_reader.OneShape();
+    std::unordered_map<const TopoDS_TShape*, const TopoDS_TShape*> face_remap;
+    const TopoDS_Shape imported =
+        try_sew_orphan_faces(assembly, nullptr, &face_remap);
+    if (out_entity_numbers && out_entity_kinds && out_topology_kinds &&
+        out_binding_statuses && out_tshape_ids && out_occurrence_tshape_ids &&
+        out_occurrence_matrices && out_identless_entities) {
+        TopoDS_Shape bodies = build_step_bodies_and_bindings(
+            step_reader,
+            imported,
+            face_remap,
+            *out_entity_numbers,
+            *out_entity_kinds,
+            *out_topology_kinds,
+            *out_binding_statuses,
+            *out_tshape_ids,
+            *out_identless_entities);
+        collect_step_solid_occurrences(
+            assembly, *out_occurrence_tshape_ids, *out_occurrence_matrices);
+        return std::make_unique<TopoDS_Shape>(bodies);
+    }
+    return std::make_unique<TopoDS_Shape>(imported);
+}
+
+std::unique_ptr<TopoDS_Shape> read_step_stream(RustReader& reader) {
+    return read_step_impl(
+        reader, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+        nullptr);
+}
+
+std::unique_ptr<TopoDS_Shape> read_step_bound_stream(
+    RustReader& reader,
+    rust::Vec<uint32_t>& out_entity_numbers,
+    rust::Vec<uint8_t>& out_entity_kinds,
+    rust::Vec<uint8_t>& out_topology_kinds,
+    rust::Vec<uint8_t>& out_binding_statuses,
+    rust::Vec<uint64_t>& out_tshape_ids,
+    rust::Vec<uint64_t>& out_occurrence_tshape_ids,
+    rust::Vec<double>& out_occurrence_matrices,
+    uint32_t& out_identless_entities)
+{
+    return read_step_impl(
+        reader,
+        &out_entity_numbers,
+        &out_entity_kinds,
+        &out_topology_kinds,
+        &out_binding_statuses,
+        &out_tshape_ids,
+        &out_occurrence_tshape_ids,
+        &out_occurrence_matrices,
+        &out_identless_entities);
 }
 
 bool write_step_stream(const TopoDS_Shape& shape, RustWriter& writer) {
@@ -2074,10 +2319,18 @@ static void collect_colors(
     }
 }
 
-std::unique_ptr<TopoDS_Shape> read_step_color_stream(
+static std::unique_ptr<TopoDS_Shape> read_step_color_impl(
     RustReader&          reader,
     rust::Vec<uint64_t>& out_ids,
-    rust::Vec<float>&    out_rgb)
+    rust::Vec<float>&    out_rgb,
+    rust::Vec<uint32_t>* out_entity_numbers,
+    rust::Vec<uint8_t>*  out_entity_kinds,
+    rust::Vec<uint8_t>*  out_topology_kinds,
+    rust::Vec<uint8_t>*  out_binding_statuses,
+    rust::Vec<uint64_t>* out_tshape_ids,
+    rust::Vec<uint64_t>* out_occurrence_tshape_ids,
+    rust::Vec<double>*   out_occurrence_matrices,
+    uint32_t*            out_identless_entities)
 {
     try {
         // Create XDE document directly — avoids XCAFApp_Application which
@@ -2116,11 +2369,33 @@ std::unique_ptr<TopoDS_Shape> read_step_color_stream(
         std::unordered_map<uint64_t, std::array<float, 3>> colorMap;
         collect_colors(doc, colorTool, colorMap);
 
-        // Recover Solids from disjoint shells / loose faces (#129); also remaps
-        // colorMap keys for faces whose TShape* changed during sewing.
-        TopoDS_Shape post = try_sew_orphan_faces(compound, &colorMap);
+        std::unordered_map<const TopoDS_TShape*, const TopoDS_TShape*> face_remap;
+        TopoDS_Shape imported =
+            try_sew_orphan_faces(compound, &colorMap, &face_remap);
+        TopoDS_Shape result;
+        if (out_entity_numbers && out_entity_kinds && out_topology_kinds &&
+            out_binding_statuses && out_tshape_ids &&
+            out_occurrence_tshape_ids && out_occurrence_matrices &&
+            out_identless_entities) {
+            result = build_step_bodies_and_bindings(
+                cafreader.Reader(),
+                imported,
+                face_remap,
+                *out_entity_numbers,
+                *out_entity_kinds,
+                *out_topology_kinds,
+                *out_binding_statuses,
+                *out_tshape_ids,
+                *out_identless_entities);
+            collect_step_solid_occurrences(
+                compound,
+                *out_occurrence_tshape_ids,
+                *out_occurrence_matrices);
+        } else {
+            result = imported;
+        }
 
-        // Walk the POST-processed shape so sewing's new TShape* are picked up, and
+        // Walk the returned shape so sewing's new TShape* are picked up, and
         // entries it no longer holds are dropped by not being reached.
         auto emit = [&](const TopoDS_Shape& sub) {
             uint64_t id = reinterpret_cast<uint64_t>(sub.TShape().get());
@@ -2131,17 +2406,63 @@ std::unique_ptr<TopoDS_Shape> read_step_color_stream(
             out_rgb.push_back(it->second[1]);
             out_rgb.push_back(it->second[2]);
         };
-        for (TopExp_Explorer ex(post, TopAbs_FACE); ex.More(); ex.Next()) {
+        for (TopExp_Explorer ex(result, TopAbs_FACE); ex.More(); ex.Next()) {
             emit(ex.Current());
         }
-        for (TopExp_Explorer ex(post, TopAbs_SOLID); ex.More(); ex.Next()) {
+        for (TopExp_Explorer ex(result, TopAbs_SOLID); ex.More(); ex.Next()) {
             emit(ex.Current());
         }
 
-        return std::make_unique<TopoDS_Shape>(post);
+        return std::make_unique<TopoDS_Shape>(result);
     } catch (const Standard_Failure&) {
         return nullptr;
     }
+}
+
+std::unique_ptr<TopoDS_Shape> read_step_color_stream(
+    RustReader&          reader,
+    rust::Vec<uint64_t>& out_ids,
+    rust::Vec<float>&    out_rgb)
+{
+    return read_step_color_impl(
+        reader,
+        out_ids,
+        out_rgb,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr);
+}
+
+std::unique_ptr<TopoDS_Shape> read_step_bound_color_stream(
+    RustReader&          reader,
+    rust::Vec<uint64_t>& out_ids,
+    rust::Vec<float>&    out_rgb,
+    rust::Vec<uint32_t>& out_entity_numbers,
+    rust::Vec<uint8_t>&  out_entity_kinds,
+    rust::Vec<uint8_t>&  out_topology_kinds,
+    rust::Vec<uint8_t>&  out_binding_statuses,
+    rust::Vec<uint64_t>& out_tshape_ids,
+    rust::Vec<uint64_t>& out_occurrence_tshape_ids,
+    rust::Vec<double>&   out_occurrence_matrices,
+    uint32_t&            out_identless_entities)
+{
+    return read_step_color_impl(
+        reader,
+        out_ids,
+        out_rgb,
+        &out_entity_numbers,
+        &out_entity_kinds,
+        &out_topology_kinds,
+        &out_binding_statuses,
+        &out_tshape_ids,
+        &out_occurrence_tshape_ids,
+        &out_occurrence_matrices,
+        &out_identless_entities);
 }
 
 bool write_step_color_stream(

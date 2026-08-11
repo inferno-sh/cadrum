@@ -35,6 +35,8 @@ mod ffi_bridge {
 		#[cfg(not(feature = "color"))]
 		fn read_step_stream(reader: &mut RustReader) -> UniquePtr<TopoDS_Shape>;
 		#[cfg(not(feature = "color"))]
+		fn read_step_bound_stream(reader: &mut RustReader, out_entity_numbers: &mut Vec<u32>, out_entity_kinds: &mut Vec<u8>, out_topology_kinds: &mut Vec<u8>, out_binding_statuses: &mut Vec<u8>, out_tshape_ids: &mut Vec<u64>, out_occurrence_tshape_ids: &mut Vec<u64>, out_occurrence_matrices: &mut Vec<f64>, out_identless_entities: &mut u32) -> UniquePtr<TopoDS_Shape>;
+		#[cfg(not(feature = "color"))]
 		fn write_step_stream(shape: &TopoDS_Shape, writer: &mut RustWriter) -> bool;
 		// `out_consumed` = payload length, where the color trailer begins. Written only
 		// when the returned pointer is non-null.
@@ -63,6 +65,9 @@ mod ffi_bridge {
 
 		#[cfg(feature = "color")]
 		fn read_step_color_stream(reader: &mut RustReader, out_ids: &mut Vec<u64>, out_rgb: &mut Vec<f32>) -> UniquePtr<TopoDS_Shape>;
+
+		#[cfg(feature = "color")]
+		fn read_step_bound_color_stream(reader: &mut RustReader, out_ids: &mut Vec<u64>, out_rgb: &mut Vec<f32>, out_entity_numbers: &mut Vec<u32>, out_entity_kinds: &mut Vec<u8>, out_topology_kinds: &mut Vec<u8>, out_binding_statuses: &mut Vec<u8>, out_tshape_ids: &mut Vec<u64>, out_occurrence_tshape_ids: &mut Vec<u64>, out_occurrence_matrices: &mut Vec<f64>, out_identless_entities: &mut u32) -> UniquePtr<TopoDS_Shape>;
 
 		#[cfg(feature = "color")]
 		fn write_step_color_stream(shape: &TopoDS_Shape, ids: &[u64], rgb: &[f32], writer: &mut RustWriter) -> bool;
