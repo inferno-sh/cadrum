@@ -893,6 +893,44 @@ static bool append_triangulated_face(
     return true;
 }
 
+// Shape-level meshing can omit features smaller than its global chord tolerance.
+// Retry an omitted face twice at finer tolerances before topology repair.
+static bool append_refined_visual_face(
+    const TopoDS_Face& sourceFace,
+    double linear,
+    double angular,
+    bool relative,
+    MeshData& result,
+    uint32_t& globalVertexOffset)
+{
+    const uint64_t sourceFaceId =
+        reinterpret_cast<uint64_t>(sourceFace.TShape().get());
+    double retryLinear = linear;
+    double retryAngular = angular;
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        retryLinear *= 0.1;
+        retryAngular *= 0.5;
+        if (retryLinear <= Precision::Confusion()
+            || retryAngular <= Precision::Angular())
+        {
+            return false;
+        }
+        try {
+            BRepMesh_IncrementalMesh mesher(
+                sourceFace, retryLinear, relative, retryAngular, false);
+            if (mesher.IsDone()
+                && append_triangulated_face(
+                    sourceFace, sourceFaceId, result, globalVertexOffset))
+            {
+                return true;
+            }
+        } catch (const Standard_Failure&) {
+            return false;
+        }
+    }
+    return false;
+}
+
 // Split omitted closed-periodic visual faces without replacing source topology or authority.
 // Accept only complete staged meshes within 0.2% exact area; retain the source face id.
 static bool append_divided_closed_visual_face(
@@ -1011,13 +1049,22 @@ MeshData mesh_shape(const TopoDS_Shape& shape, double linear, double angular, bo
         if (!append_triangulated_face(
                 face, faceId, result, globalVertexOffset))
         {
-            append_divided_closed_visual_face(
-                face,
-                linear,
-                angular,
-                relative,
-                result,
-                globalVertexOffset);
+            if (!append_refined_visual_face(
+                    face,
+                    linear,
+                    angular,
+                    relative,
+                    result,
+                    globalVertexOffset))
+            {
+                append_divided_closed_visual_face(
+                    face,
+                    linear,
+                    angular,
+                    relative,
+                    result,
+                    globalVertexOffset);
+            }
         }
     }
 

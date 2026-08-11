@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::env;
 use std::fs;
 
-use cadrum::{Solid, StepTopologyBindingTarget, StepVisualTessellation};
+use cadrum::{Solid, StepTopologyBindingTarget, StepVisualTessellation, Tessellation};
 
 fn main() {
 	let path = env::args().nth(1).expect("usage: step_binding_probe FILE.step [ENTITY] [PROFILE]");
@@ -24,6 +24,18 @@ fn main() {
 	});
 
 	println!("exact_solids={} recovered_bodies={} unbound_bodies={} bindings={} identless={}", import.solids.len(), import.recovered_bodies.len(), import.unbound_bodies.len(), import.bindings.len(), import.skipped_identless_entities);
+	for (solid_index, solid) in import.solids.iter().enumerate() {
+		for &profile in &profiles {
+			let mesh = Solid::mesh([solid], visual_parameters(profile)).expect("mesh exact solid");
+			let meshed = mesh.face_ids.iter().copied().collect::<BTreeSet<_>>();
+			println!("solid={solid_index} profile={profile:?} vertices={} triangles={} meshed_faces={}", mesh.vertices.len(), mesh.indices.len() / 3, meshed.len());
+			let unmeshed: Vec<_> = solid.iter_face().filter(|face| !meshed.contains(&face.id())).collect();
+			for face in &unmeshed {
+				println!("solid={solid_index} profile={profile:?} unmeshed_tshape={} area_mm2={} source_entities={:?}", face.id(), face.area(), sources_by_target.get(&face.id()).cloned().unwrap_or_default());
+			}
+			assert!(unmeshed.is_empty(), "every retained exact-solid face must emit triangles");
+		}
+	}
 	for (body_index, body) in import.recovered_bodies.iter().enumerate() {
 		for &profile in &profiles {
 			let mesh = body.mesh(profile).expect("mesh recovered body");
@@ -47,5 +59,13 @@ fn main() {
 			}
 			assert!(unmeshed.is_empty(), "every retained visual face must emit triangles");
 		}
+	}
+}
+
+fn visual_parameters(profile: StepVisualTessellation) -> Tessellation {
+	match profile {
+		StepVisualTessellation::Preview => Tessellation { deflection_linear: 1.0, deflection_angular: 0.75, relative_linear: false },
+		StepVisualTessellation::Standard => Tessellation { deflection_linear: 0.1, deflection_angular: 0.25, relative_linear: false },
+		StepVisualTessellation::High => Tessellation { deflection_linear: 0.01, deflection_angular: 0.1, relative_linear: false },
 	}
 }
