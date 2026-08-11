@@ -130,18 +130,26 @@ impl StepVisualTessellation {
 #[derive(Clone, Copy)]
 pub struct StepVisualFace<'a> {
 	_body: &'a StepVisualBody,
-	id: u64,
+	face: &'a super::face::Face,
 }
 
 impl StepVisualFace<'_> {
 	pub fn id(&self) -> u64 {
-		self.id
+		self.face.id()
+	}
+
+	/// Geometric area in OCCT's STEP system unit (square millimetres).
+	///
+	/// This is visual-fidelity evidence only. It does not grant mass, density,
+	/// collision, or manufacturing authority to the enclosing body.
+	pub fn visual_area_mm2(&self) -> f64 {
+		ffi::face_surface_area(&self.face.inner)
 	}
 
 	/// Effective display color: a face color overrides its body's color.
 	#[cfg(feature = "color")]
 	pub fn color(&self) -> Option<Color> {
-		self._body.inner.colormap().get(&self.id).copied().or_else(|| self._body.color())
+		self._body.inner.colormap().get(&self.id()).copied().or_else(|| self._body.color())
 	}
 }
 
@@ -182,7 +190,7 @@ impl StepVisualBody {
 
 	/// Iterates opaque display faces without exposing CAD-authoring handles.
 	pub fn iter_face(&self) -> impl Iterator<Item = StepVisualFace<'_>> + '_ {
-		self.inner.iter_face().map(|face| StepVisualFace { _body: self, id: face.id() })
+		self.inner.iter_face().map(|face| StepVisualFace { _body: self, face })
 	}
 
 	/// Authored body-level display color, before any face-specific override.

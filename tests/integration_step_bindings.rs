@@ -79,6 +79,7 @@ fn reader_recovery_never_becomes_a_bound_solid_definition() {
 	assert!(!import.bindings.iter().any(|binding| binding.topology_kind == StepTopologyKind::Solid));
 	let recovered: &StepVisualBody = &import.recovered_bodies[0];
 	let recovered_face_ids: HashSet<u64> = recovered.iter_face().map(|face| face.id()).collect();
+	assert!(recovered.iter_face().all(|face| face.visual_area_mm2().is_finite() && face.visual_area_mm2() >= 0.0));
 	assert!(import.bindings.iter().all(|binding| binding.kernel_tshape_id().is_some_and(|id| recovered_face_ids.contains(&id))));
 	#[cfg(feature = "color")]
 	assert!(recovered.iter_face().any(|face| face.color().is_some()), "visual face color remains queryable without exposing a CAD Face");
