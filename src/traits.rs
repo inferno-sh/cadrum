@@ -421,6 +421,10 @@ pub trait FaceStruct: Sized {
 	/// meaning beyond equality / hash use.
 	fn id(&self) -> u64;
 
+	/// Exact trimmed surface area in the backend's squared model units.
+	/// This queries source geometry, not visual tessellation or physical authority.
+	fn area(&self) -> f64;
+
 	/// Project a 3D point onto this face. Returns `(closest_point,
 	/// outward_normal)`. Sister of `Wire::project` which returns `(closest,
 	/// tangent)` on a 1D curve.

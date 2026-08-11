@@ -22,6 +22,8 @@ fn test_cube_mass_properties_match_analytical() {
 
 	assert!((cube.volume() - a.powi(3)).abs() < EPS);
 	assert!((cube.area() - 6.0 * a.powi(2)).abs() < EPS);
+	let face_area = cube.iter_face().map(|face| face.area()).sum::<f64>();
+	assert!((face_area - cube.area()).abs() < EPS, "trimmed face areas must sum to the solid surface area");
 	assert!((cube.center() - DVec3::splat(a / 2.0)).length() < EPS);
 
 	let i = cube.inertia();

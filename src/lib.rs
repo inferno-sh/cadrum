@@ -127,6 +127,9 @@ impl Face {
 	pub fn id(&self) -> u64 {
 		<Self as crate::traits::FaceStruct>::id(self)
 	}
+	pub fn area(&self) -> f64 {
+		<Self as crate::traits::FaceStruct>::area(self)
+	}
 	pub fn project(&self, p: DVec3) -> (DVec3, DVec3) {
 		<Self as crate::traits::FaceStruct>::project(self, p)
 	}
