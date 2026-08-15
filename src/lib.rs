@@ -82,6 +82,9 @@ impl Edge {
 	pub fn circle(radius: f64, axis: DVec3) -> Result<crate::Edge, Error> {
 		<Self as crate::traits::EdgeStruct>::circle(radius, axis)
 	}
+	pub fn ellipse(major_radius: f64, minor_radius: f64, axis: DVec3, x_ref: DVec3) -> Result<crate::Edge, Error> {
+		<Self as crate::traits::EdgeStruct>::ellipse(major_radius, minor_radius, axis, x_ref)
+	}
 	pub fn line(a: DVec3, b: DVec3) -> Result<crate::Edge, Error> {
 		<Self as crate::traits::EdgeStruct>::line(a, b)
 	}

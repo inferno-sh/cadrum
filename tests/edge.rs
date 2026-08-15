@@ -46,6 +46,18 @@ fn project_on_circle_returns_radius() {
 }
 
 #[test]
+fn project_on_ellipse_preserves_exact_axes() {
+	let ellipse = Edge::ellipse(3.0, 2.0, DVec3::Z, DVec3::X).unwrap();
+	assert!(ellipse.is_closed());
+	let (major, _) = ellipse.project(DVec3::new(5.0, 0.0, 0.0));
+	let (minor, _) = ellipse.project(DVec3::new(0.0, 5.0, 0.0));
+	assert!(approx_eq(major, DVec3::new(3.0, 0.0, 0.0), TOL));
+	assert!(approx_eq(minor, DVec3::new(0.0, 2.0, 0.0), TOL));
+	assert!(Edge::ellipse(1.0, 2.0, DVec3::Z, DVec3::X).is_err());
+	assert!(Edge::ellipse(3.0, 2.0, DVec3::Z, DVec3::Z).is_err());
+}
+
+#[test]
 fn project_on_polygon_picks_nearest_edge() {
 	// Closed square in XY plane: edges (±1, ±1, 0). Query point near +X edge.
 	let square = Edge::polygon([DVec3::new(1.0, 1.0, 0.0), DVec3::new(-1.0, 1.0, 0.0), DVec3::new(-1.0, -1.0, 0.0), DVec3::new(1.0, -1.0, 0.0)].iter()).unwrap();

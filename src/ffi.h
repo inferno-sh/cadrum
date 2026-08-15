@@ -266,6 +266,13 @@ std::unique_ptr<std::vector<TopoDS_Edge>> make_polygon_edges(
 std::unique_ptr<TopoDS_Edge> make_circle_edge(
     double ax, double ay, double az, double radius);
 
+// Construct a closed ellipse centered at the origin with an explicit major axis.
+// Radii must satisfy major >= minor > 0; x_ref must not parallel axis.
+std::unique_ptr<TopoDS_Edge> make_ellipse_edge(
+    double ax, double ay, double az,
+    double xrx, double xry, double xrz,
+    double major_radius, double minor_radius);
+
 // Construct a straight line segment edge from point a to point b.
 std::unique_ptr<TopoDS_Edge> make_line_edge(
     double ax, double ay, double az,

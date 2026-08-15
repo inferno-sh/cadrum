@@ -368,6 +368,10 @@ pub trait EdgeStruct: Sized + Clone + Transform {
 	/// edge into place rather than relying on the implicit choice.
 	fn circle(radius: f64, axis: DVec3) -> Result<Self, Error>;
 
+	/// Closed ellipse centered at the origin; `x_ref` fixes its major-axis direction.
+	/// Requires `major_radius >= minor_radius > 0` and nonparallel axis references.
+	fn ellipse(major_radius: f64, minor_radius: f64, axis: DVec3, x_ref: DVec3) -> Result<Self, Error>;
+
 	/// Straight line segment from `a` to `b`. Fails with `InvalidEdge` if
 	/// `a == b` (zero-length segment).
 	fn line(a: DVec3, b: DVec3) -> Result<Self, Error>;

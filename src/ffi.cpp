@@ -23,8 +23,10 @@
 #include <gp_Ax1.hxx>
 #include <gp_Ax2.hxx>
 #include <gp_Circ.hxx>
+#include <gp_Elips.hxx>
 #include <gp_Pln.hxx>
 #include <gp_Trsf.hxx>
+#include <gp_Vec.hxx>
 #include <Geom_CylindricalSurface.hxx>
 #include <Geom2d_Line.hxx>
 #include <GC_MakeArcOfCircle.hxx>
@@ -1312,6 +1314,29 @@ std::unique_ptr<TopoDS_Edge> make_circle_edge(
         BRepBuilderAPI_MakeEdge edgeMaker(circ);
         if (!edgeMaker.IsDone()) return nullptr;
         return std::make_unique<TopoDS_Edge>(edgeMaker.Edge());
+    } catch (const Standard_Failure&) {
+        return nullptr;
+    }
+}
+
+std::unique_ptr<TopoDS_Edge> make_ellipse_edge(
+    double ax, double ay, double az,
+    double xrx, double xry, double xrz,
+    double major_radius, double minor_radius)
+{
+    try {
+        if (minor_radius < Precision::Confusion() ||
+            major_radius < minor_radius) return nullptr;
+        gp_Dir axis_dir(ax, ay, az);
+        gp_Vec x_ref(xrx, xry, xrz);
+        gp_Vec axis(axis_dir);
+        gp_Vec projected = x_ref - axis * x_ref.Dot(axis);
+        if (projected.Magnitude() < Precision::Confusion()) return nullptr;
+        gp_Ax2 ax2(gp_Pnt(0.0, 0.0, 0.0), axis_dir, gp_Dir(projected));
+        gp_Elips ellipse(ax2, major_radius, minor_radius);
+        BRepBuilderAPI_MakeEdge edge_maker(ellipse);
+        if (!edge_maker.IsDone()) return nullptr;
+        return std::make_unique<TopoDS_Edge>(edge_maker.Edge());
     } catch (const Standard_Failure&) {
         return nullptr;
     }

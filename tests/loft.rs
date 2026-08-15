@@ -51,6 +51,19 @@ fn test_loft_01_frustum_volume_matches_analytical() {
 	println!("frustum loft: volume = {:.4} (expected {:.4})", actual, expected);
 }
 
+#[test]
+fn elliptic_sections_loft_to_analytical_frustum_volume() {
+	let height = 10.0;
+	let lower = vec![Edge::ellipse(4.0, 2.0, DVec3::Z, DVec3::X).unwrap()];
+	let upper = vec![Edge::ellipse(2.0, 1.0, DVec3::Z, DVec3::X).unwrap().translate(DVec3::Z * height)];
+	let loft = Solid::loft(&[lower, upper], false).expect("elliptic loft");
+	let lower_area = PI * 4.0 * 2.0;
+	let upper_area = PI * 2.0 * 1.0;
+	let expected = height / 3.0 * (lower_area + (lower_area * upper_area).sqrt() + upper_area);
+	let relative_error = (loft.volume() - expected).abs() / expected;
+	assert!(relative_error < 0.01, "volume={} expected={expected}", loft.volume());
+}
+
 // ==================== (2) エラーケース: section 1 つ ====================
 
 #[test]
