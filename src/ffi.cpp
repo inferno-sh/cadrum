@@ -784,6 +784,17 @@ double face_surface_area(const TopoDS_Face& face) {
     return props.Mass();
 }
 
+void face_center_of_mass(const TopoDS_Face& face,
+    double& x, double& y, double& z)
+{
+    GProp_GProps props;
+    BRepGProp::SurfaceProperties(face, props);
+    gp_Pnt center = props.CentreOfMass();
+    x = center.X();
+    y = center.Y();
+    z = center.Z();
+}
+
 void shape_center_of_mass(const TopoDS_Shape& shape,
     double& x, double& y, double& z)
 {

@@ -425,6 +425,10 @@ pub trait FaceStruct: Sized {
 	/// This queries source geometry, not visual tessellation or physical authority.
 	fn area(&self) -> f64;
 
+	/// Area-weighted center of the exact trimmed surface, suitable for directional
+	/// topology selection; it need not lie on a curved or concave face.
+	fn center(&self) -> DVec3;
+
 	/// Project a 3D point onto this face. Returns `(closest_point,
 	/// outward_normal)`. Sister of `Wire::project` which returns `(closest,
 	/// tangent)` on a 1D curve.

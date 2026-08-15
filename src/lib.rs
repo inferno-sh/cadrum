@@ -130,6 +130,9 @@ impl Face {
 	pub fn area(&self) -> f64 {
 		<Self as crate::traits::FaceStruct>::area(self)
 	}
+	pub fn center(&self) -> DVec3 {
+		<Self as crate::traits::FaceStruct>::center(self)
+	}
 	pub fn project(&self, p: DVec3) -> (DVec3, DVec3) {
 		<Self as crate::traits::FaceStruct>::project(self, p)
 	}

@@ -1,6 +1,19 @@
 use cadrum::{DVec3, Solid};
 
 #[test]
+fn face_centers_support_directional_selection() {
+	let cube = Solid::cube(DVec3::ZERO, DVec3::splat(10.0));
+	let centers = cube.iter_face().map(|face| face.center()).collect::<Vec<_>>();
+	assert_eq!(centers.len(), 6);
+	for axis in 0..3 {
+		let minimum = centers.iter().map(|center| center[axis]).reduce(f64::min).unwrap();
+		let maximum = centers.iter().map(|center| center[axis]).reduce(f64::max).unwrap();
+		assert!((minimum - 0.0).abs() < 1e-9);
+		assert!((maximum - 10.0).abs() < 1e-9);
+	}
+}
+
+#[test]
 fn test_shell_cube_reduces_volume() {
 	let cube = Solid::cube(DVec3::ZERO, DVec3::splat(10.0));
 	let original_volume = cube.volume();
