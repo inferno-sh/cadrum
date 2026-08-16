@@ -32,6 +32,9 @@ pub enum Error {
 	/// Shape cleaning (UnifySameDomain) failed.
 	CleanFailed,
 
+	/// Exact minimum-distance evaluation between two solids failed.
+	DistanceFailed,
+
 	/// Helix edge construction failed (e.g. degenerate parameters).
 	HelixFailed,
 
@@ -116,6 +119,7 @@ impl std::fmt::Display for Error {
 			Error::BooleanOperationFailed => write!(f, "Boolean operation failed"),
 			Error::OneFailed(n) => write!(f, "Expected exactly one resulting Solid, got {}", n),
 			Error::CleanFailed => write!(f, "Shape clean failed"),
+			Error::DistanceFailed => write!(f, "Shape distance query failed"),
 			Error::HelixFailed => write!(f, "Helix failed"),
 			Error::ExtrudeFailed => write!(f, "Extrude failed"),
 			Error::SweepFailed => write!(f, "Sweep failed"),

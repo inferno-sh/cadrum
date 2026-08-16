@@ -61,6 +61,21 @@ fn test_rotated_y_preserves_volume() {
 	assert!((rotated.volume() - 1000.0).abs() < 1e-3);
 }
 
+#[test]
+fn test_exact_solid_distance_handles_separation_contact_and_intersection() {
+	let first = test_box();
+	let separated = test_box().translate(dvec3(15.0, 0.0, 0.0));
+	let touching = test_box().translate(dvec3(10.0, 0.0, 0.0));
+	let overlapping = test_box().translate(dvec3(9.0, 0.0, 0.0));
+	let contained = Solid::cube(dvec3(2.0, 2.0, 2.0), dvec3(8.0, 8.0, 8.0));
+
+	assert!((first.distance(&separated).expect("separated distance") - 5.0).abs() < 1e-9);
+	assert!((separated.distance(&first).expect("symmetric distance") - 5.0).abs() < 1e-9);
+	assert!(first.distance(&touching).expect("touching distance") < 1e-9);
+	assert!(first.distance(&overlapping).expect("overlap distance") < 1e-9);
+	assert!(first.distance(&contained).expect("containment distance") < 1e-9);
+}
+
 // ==================== scale ====================
 
 #[test]

@@ -461,7 +461,7 @@ pub trait FaceStruct: Sized {
 /// Backend-independent solid trait (pub(crate) — not exposed to users).
 ///
 /// Holds every `Solid` operation: constructors, topology accessors, queries
-/// (volume / area / center / inertia / bounding_box / contains), color, editing,
+/// (volume / area / center / inertia / distance / bounding_box / contains), color, editing,
 /// boolean primitives and I/O. Spatial transforms come from the `Transform`
 /// supertrait. Collections of solids (`Vec<Solid>` / `[Solid; N]`) are handled
 /// with iterator idioms — e.g. `solids.iter().map(|s| s.volume()).sum::<f64>()`,
@@ -514,6 +514,8 @@ pub trait SolidStruct: Sized + Clone + Transform {
 	fn center(&self) -> DVec3;
 	/// Inertia tensor about the **world origin** (uniform density).
 	fn inertia(&self) -> DMat3;
+	/// Exact minimum distance to `other`, or zero when the solid volumes intersect.
+	fn distance(&self, other: &Self) -> Result<f64, Error>;
 	/// Whether `point` lies inside (or on) the solid.
 	fn contains(&self, point: DVec3) -> bool;
 	/// Axis-aligned bounding box as `[min, max]`.

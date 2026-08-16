@@ -123,7 +123,7 @@ C++17 compiler (GCC, Clang, or MSVC) and CMake.
 | **Curves** | `Edge::line`, `Edge::arc_3pts`, `Edge::circle`, `Edge::polygon`, `Edge::helix`, `Edge::bspline` |
 | **Surfacing** | `Solid::extrude`, `Solid::sweep`, `Solid::loft`, `Solid::bspline` |
 | **Editing** | `Solid::shell`, `Solid::fillet_edges`, `Solid::chamfer_edges`, `Solid::clean` |
-| **Queries** | `Solid::volume`, `Solid::area`, `Solid::center`, `Solid::inertia`, `Solid::bounding_box`, `Solid::contains` |
+| **Queries** | `Solid::volume`, `Solid::area`, `Solid::center`, `Solid::inertia`, `Solid::distance`, `Solid::bounding_box`, `Solid::contains` |
 | **Topology** | `Solid::iter_face`, `Solid::iter_edge`, `Face::iter_edge`, `Face::project`, `Edge::project` |
 | **Identity / history** | `Solid::id`, `Face::id`, `Edge::id`, `Solid::iter_history` |
 | **I/O** | `Solid::read_step` / `Solid::write_step`, `Solid::read_brep` / `Solid::write_brep` (BRep = OCCT's `BinTools` binary format) |
