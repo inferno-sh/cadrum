@@ -573,6 +573,10 @@ cargo run --example 07_sweep
 //! - `Auxiliary(aux_spine)`: profile's tracked axis points from the main spine
 //!   toward a parallel auxiliary spine. Arbitrary twist control — e.g. a
 //!   helical `aux_spine` on a straight `spine` produces a twisted ribbon.
+//!
+//! `Solid::sweep` retains OCCT's `Transformed` behavior at C0 spine corners.
+//! Use `Solid::sweep_with_transition(..., SweepTransition::Round)` for a
+//! rounded corner or `SweepTransition::Right` for an extended, mitered join.
 
 use cadrum::{DVec3, Edge, Error, ProfileOrient, Solid};
 

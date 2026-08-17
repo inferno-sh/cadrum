@@ -360,12 +360,15 @@ std::unique_ptr<TopoDS_Shape> make_extrude(
 //   2 = Up      — keep `(ux, uy, uz)` as the constant binormal direction
 //   3 = Auxiliary — use `aux_spine_edges` as auxiliary spine for twist control
 // Any other value falls back to Torsion.
+// `transition` selects how C0 spine corners are joined:
+//   0 = Transformed, 1 = RoundCorner, 2 = RightCorner
 std::unique_ptr<TopoDS_Shape> make_pipe_shell(
     const std::vector<TopoDS_Edge>& all_edges,
     const std::vector<TopoDS_Edge>& spine_edges,
     uint32_t orient,
     double ux, double uy, double uz,
-    const std::vector<TopoDS_Edge>& aux_spine_edges);
+    const std::vector<TopoDS_Edge>& aux_spine_edges,
+    uint32_t transition);
 
 // Helpers for the Rust side to construct a std::vector<TopoDS_Edge>.
 std::unique_ptr<std::vector<TopoDS_Edge>> edge_vec_new();

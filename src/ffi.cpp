@@ -46,6 +46,7 @@
 #include <BRepBuilderAPI_MakeVertex.hxx>
 #include <BRepBuilderAPI_Sewing.hxx>
 #include <BRepBuilderAPI_Transform.hxx>
+#include <BRepBuilderAPI_TransitionMode.hxx>
 #include <BRepClass3d_SolidClassifier.hxx>
 #include <BRepExtrema_DistShapeShape.hxx>
 #include <BRepExtrema_ExtPF.hxx>
@@ -1851,7 +1852,8 @@ std::unique_ptr<TopoDS_Shape> make_pipe_shell(
     const std::vector<TopoDS_Edge>& spine_edges,
     uint32_t orient,
     double ux, double uy, double uz,
-    const std::vector<TopoDS_Edge>& aux_spine_edges)
+    const std::vector<TopoDS_Edge>& aux_spine_edges,
+    uint32_t transition)
 {
     try {
         if (all_edges.empty() || spine_edges.empty()) return nullptr;
@@ -1863,6 +1865,13 @@ std::unique_ptr<TopoDS_Shape> make_pipe_shell(
         TopoDS_Wire spine = spineMaker.Wire();
 
         BRepOffsetAPI_MakePipeShell shell(spine);
+
+        switch (transition) {
+            case 0: shell.SetTransitionMode(BRepBuilderAPI_Transformed); break;
+            case 1: shell.SetTransitionMode(BRepBuilderAPI_RoundCorner); break;
+            case 2: shell.SetTransitionMode(BRepBuilderAPI_RightCorner); break;
+            default: return nullptr;
+        }
 
         // Configure trihedron law.
         switch (orient) {

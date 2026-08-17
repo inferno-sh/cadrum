@@ -4,7 +4,7 @@ use super::face::Face;
 use super::ffi;
 use crate::common::boolean::Boolean;
 use crate::common::error::Error;
-use crate::traits::{ProfileOrient, SolidStruct, Transform};
+use crate::traits::{ProfileOrient, SolidStruct, SweepTransition, Transform};
 use glam::DVec3;
 use std::sync::{Mutex, OnceLock};
 
@@ -340,6 +340,10 @@ impl SolidStruct for Solid {
 	// ==================== Sweep ====================
 
 	fn sweep<'a, 'b, 'c>(profile: impl IntoIterator<Item = &'a Edge>, spine: impl IntoIterator<Item = &'b Edge>, orient: ProfileOrient<'c>) -> Result<Self, Error> {
+		Self::sweep_with_transition(profile, spine, orient, SweepTransition::Transformed)
+	}
+
+	fn sweep_with_transition<'a, 'b, 'c>(profile: impl IntoIterator<Item = &'a Edge>, spine: impl IntoIterator<Item = &'b Edge>, orient: ProfileOrient<'c>, transition: SweepTransition) -> Result<Self, Error> {
 		let mut profile_vec = ffi::edge_vec_new();
 		for e in profile {
 			ffi::edge_vec_push(profile_vec.pin_mut(), &e.inner);
@@ -349,7 +353,12 @@ impl SolidStruct for Solid {
 			ffi::edge_vec_push(spine_vec.pin_mut(), &e.inner);
 		}
 		let (kind, ux, uy, uz, aux_vec) = encode_orient(orient);
-		let shape = ffi::make_pipe_shell(&profile_vec, &spine_vec, kind, ux, uy, uz, &aux_vec);
+		let transition = match transition {
+			SweepTransition::Transformed => 0,
+			SweepTransition::Round => 1,
+			SweepTransition::Right => 2,
+		};
+		let shape = ffi::make_pipe_shell(&profile_vec, &spine_vec, kind, ux, uy, uz, &aux_vec, transition);
 		if shape.is_null() {
 			return Err(Error::SweepFailed);
 		}

@@ -244,6 +244,18 @@ pub enum ProfileOrient<'a> {
 	Auxiliary(&'a [crate::Edge]),
 }
 
+/// Controls how a pipe sweep joins C0-discontinuous spine edges.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum SweepTransition {
+	/// Transform the sweeping frame at a corner. This is OCCT's default.
+	#[default]
+	Transformed,
+	/// Rotate the profile around the corner to form a rounded join.
+	Round,
+	/// Extend adjacent sweep pieces and intersect them into a mitered join.
+	Right,
+}
+
 // ==================== BSplineEnd ====================
 
 /// End-condition selector for [`EdgeStruct::bspline`].
@@ -607,6 +619,11 @@ pub trait SolidStruct: Sized + Clone + Transform {
 	// face 入力に対しては実質起きないため、`Vec<Self>` に拡張する手間を省いた。
 	// 想定外ケースに当たったら `Solid::new` の debug_assert で気付ける。
 	fn sweep<'a, 'b, 'c>(profile: impl IntoIterator<Item = &'a Self::Edge>, spine: impl IntoIterator<Item = &'b Self::Edge>, orient: ProfileOrient<'c>) -> Result<Self, Error>
+	where
+		Self::Edge: 'a + 'b;
+
+	/// Sweep with an explicit join mode for C0-discontinuous spine edges.
+	fn sweep_with_transition<'a, 'b, 'c>(profile: impl IntoIterator<Item = &'a Self::Edge>, spine: impl IntoIterator<Item = &'b Self::Edge>, orient: ProfileOrient<'c>, transition: SweepTransition) -> Result<Self, Error>
 	where
 		Self::Edge: 'a + 'b;
 
