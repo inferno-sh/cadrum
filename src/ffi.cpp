@@ -1504,7 +1504,7 @@ std::unique_ptr<TopoDS_Edge> make_arc_edge(
     }
 }
 
-// Cubic B-spline edge interpolating the given data points.
+// B-spline edge interpolating the given data points.
 //
 // `coords` is a flat array of xyz triples (length must be a multiple of 3
 // and ≥ 6). Each (x, y, z) triple is one interpolation target — the
@@ -1528,9 +1528,11 @@ std::unique_ptr<TopoDS_Edge> make_bspline_edge(
     rust::Slice<const double> coords,
     uint32_t end_kind,
     double sx, double sy, double sz,
-    double ex, double ey, double ez)
+    double ex, double ey, double ez,
+    double tolerance)
 {
-    if (coords.size() < 6 || coords.size() % 3 != 0) return nullptr;
+    if (coords.size() < 6 || coords.size() % 3 != 0 ||
+        !std::isfinite(tolerance) || tolerance <= 0.0) return nullptr;
     try {
         // Local alias: `Handle(NCollection_HArray1<gp_Pnt>)` は Handle マクロが
         // template 内のカンマで引数を分割してしまうので、using alias を噛ませて
@@ -1543,7 +1545,7 @@ std::unique_ptr<TopoDS_Edge> make_bspline_edge(
         }
 
         const bool periodic = (end_kind == 0) ? true : false;
-        GeomAPI_Interpolate interp(pts, periodic, Precision::Confusion());
+        GeomAPI_Interpolate interp(pts, periodic, tolerance);
 
         if (end_kind == 2) {
             // Clamped: load explicit start and end tangent vectors.

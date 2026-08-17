@@ -87,3 +87,13 @@ fn project_on_bspline_converges_to_interpolant() {
 	// Tangent is unit-length.
 	assert!((tg.length() - 1.0).abs() < TOL, "|tg|={}", tg.length());
 }
+
+#[test]
+fn interpolation_spline_accepts_an_explicit_source_tolerance() {
+	let pts = [DVec3::new(0.0, 0.0, 0.0), DVec3::new(30.0, 0.0, 124.0), DVec3::new(118.0, 0.0, 164.0), DVec3::new(182.0, 0.0, 88.0)];
+	let spline = Edge::bspline_with_tolerance(pts.iter(), BSplineEnd::NotAKnot, 0.001).expect("CadQuery-scaled interpolation tolerance");
+	assert!(approx_eq(spline.start_point(), pts[0], 1.0e-9));
+	assert!(approx_eq(spline.end_point(), pts[3], 1.0e-9));
+	assert!(Edge::bspline_with_tolerance(pts.iter(), BSplineEnd::NotAKnot, 0.0).is_err());
+	assert!(Edge::bspline_with_tolerance(pts.iter(), BSplineEnd::NotAKnot, f64::NAN).is_err());
+}

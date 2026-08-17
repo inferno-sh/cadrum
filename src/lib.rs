@@ -94,6 +94,9 @@ impl Edge {
 	pub fn bspline<'a>(points: impl IntoIterator<Item = &'a DVec3>, end: BSplineEnd) -> Result<crate::Edge, Error> {
 		<Self as crate::traits::EdgeStruct>::bspline(points, end)
 	}
+	pub fn bspline_with_tolerance<'a>(points: impl IntoIterator<Item = &'a DVec3>, end: BSplineEnd, tolerance: f64) -> Result<crate::Edge, Error> {
+		<Self as crate::traits::EdgeStruct>::bspline_with_tolerance(points, end, tolerance)
+	}
 	pub fn translate(self, translation: DVec3) -> crate::Edge {
 		<Self as crate::traits::Transform>::translate(self, translation)
 	}

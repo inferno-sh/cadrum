@@ -154,7 +154,7 @@ mod ffi_bridge {
 		fn make_ellipse_edge(ax: f64, ay: f64, az: f64, xrx: f64, xry: f64, xrz: f64, major_radius: f64, minor_radius: f64) -> UniquePtr<TopoDS_Edge>;
 		fn make_line_edge(ax: f64, ay: f64, az: f64, bx: f64, by: f64, bz: f64) -> UniquePtr<TopoDS_Edge>;
 		fn make_arc_edge(sx: f64, sy: f64, sz: f64, mx: f64, my: f64, mz: f64, ex: f64, ey: f64, ez: f64) -> UniquePtr<TopoDS_Edge>;
-		fn make_bspline_edge(coords: &[f64], end_kind: u32, sx: f64, sy: f64, sz: f64, ex: f64, ey: f64, ez: f64) -> UniquePtr<TopoDS_Edge>;
+		fn make_bspline_edge(coords: &[f64], end_kind: u32, sx: f64, sy: f64, sz: f64, ex: f64, ey: f64, ez: f64, tolerance: f64) -> UniquePtr<TopoDS_Edge>;
 
 		fn edge_endpoints(edge: &TopoDS_Edge, sx: &mut f64, sy: &mut f64, sz: &mut f64, ex: &mut f64, ey: &mut f64, ez: &mut f64);
 		fn edge_tangents(edge: &TopoDS_Edge, sx: &mut f64, sy: &mut f64, sz: &mut f64, ex: &mut f64, ey: &mut f64, ez: &mut f64);

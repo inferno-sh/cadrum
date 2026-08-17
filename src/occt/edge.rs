@@ -128,7 +128,14 @@ impl EdgeStruct for Edge {
 	}
 
 	fn bspline<'a>(points: impl IntoIterator<Item = &'a DVec3>, end: BSplineEnd) -> Result<Self, Error> {
+		Self::bspline_with_tolerance(points, end, 1.0e-7)
+	}
+
+	fn bspline_with_tolerance<'a>(points: impl IntoIterator<Item = &'a DVec3>, end: BSplineEnd, tolerance: f64) -> Result<Self, Error> {
 		let pts: Vec<DVec3> = points.into_iter().copied().collect();
+		if !tolerance.is_finite() || tolerance <= 0.0 {
+			return Err(Error::InvalidEdge(format!("bspline: tolerance must be finite and positive, got {tolerance}")));
+		}
 
 		// 最低点数チェック: Periodic は cubic 周期 spline の構造上 ≥ 3、その他は ≥ 2。
 		let min_required = match end {
@@ -162,8 +169,8 @@ impl EdgeStruct for Edge {
 			BSplineEnd::Clamped { start: s, end: e } => (2u32, s.x, s.y, s.z, e.x, e.y, e.z),
 		};
 
-		let inner = ffi::make_bspline_edge(&coords, kind, sx, sy, sz, ex, ey, ez);
-		Edge::try_from_ffi(inner, format!("bspline: OCCT GeomAPI_Interpolate failed ({} points, end={end:?})", pts.len()))
+		let inner = ffi::make_bspline_edge(&coords, kind, sx, sy, sz, ex, ey, ez, tolerance);
+		Edge::try_from_ffi(inner, format!("bspline: OCCT GeomAPI_Interpolate failed ({} points, end={end:?}, tolerance={tolerance})", pts.len()))
 	}
 }
 

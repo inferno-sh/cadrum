@@ -403,14 +403,14 @@ pub trait EdgeStruct: Sized + Clone + Transform {
 	/// and `end`, or if any pair of points coincides.
 	fn arc_3pts(start: DVec3, mid: DVec3, end: DVec3) -> Result<Self, Error>;
 
-	/// Cubic B-spline curve interpolating the given data points.
+	/// B-spline curve interpolating the given data points.
 	///
 	/// **The points are interpolation targets, not control points.** OCCT's
 	/// `GeomAPI_Interpolate` solves a linear system so the resulting curve
 	/// passes through every input point exactly. The internal control points
 	/// and knots are computed automatically and not exposed.
 	///
-	/// - Degree: 3 (cubic)
+	/// - Degree: OCCT chooses up to 3 (linear for two targets, quadratic for three)
 	/// - Parameterization: chord-length
 	/// - End behavior: chosen by `end` (see [`BSplineEnd`])
 	///
@@ -425,6 +425,13 @@ pub trait EdgeStruct: Sized + Clone + Transform {
 	///   coincide (periodicity is encoded in the basis; do not duplicate)
 	/// - OCCT's interpolation fails (degenerate point distribution, etc.)
 	fn bspline<'a>(points: impl IntoIterator<Item = &'a DVec3>, end: BSplineEnd) -> Result<Self, Error>;
+
+	/// Build the same interpolation spline using an explicit positive model-space tolerance.
+	///
+	/// This is useful when reproducing a source CAD system whose interpolation
+	/// tolerance is part of the authored contract. It changes OCCT's point
+	/// coincidence tolerance, not the curve's degree or tessellation.
+	fn bspline_with_tolerance<'a>(points: impl IntoIterator<Item = &'a DVec3>, end: BSplineEnd, tolerance: f64) -> Result<Self, Error>;
 }
 
 /// Backend-independent face trait (pub(crate) — not exposed to users).
