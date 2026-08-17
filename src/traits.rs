@@ -556,11 +556,8 @@ pub trait SolidStruct: Sized + Clone + Transform {
 	/// + cleanup. Failure is reported as `Error::CleanFailed`.
 	fn clean(&self) -> Result<Self, Error>;
 
-	/// Subtract `tool` from this solid with OCCT's dedicated two-shape cut
-	/// operation. This is the typed, single-result alternative to constructing
-	/// a general [`Boolean`] expression; it returns
-	/// [`Error::BooleanOperationFailed`] if the cut fails or produces zero or
-	/// multiple disconnected solids.
+	/// Subtract `tool` with OCCT's dedicated cut; fail unless the result is
+	/// exactly one solid.
 	fn cut(&self, tool: &Self) -> Result<Self, Error>;
 
 	/// Extrude a closed profile wire along a direction vector to form a solid.
