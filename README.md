@@ -122,7 +122,7 @@ C++17 compiler (GCC, Clang, or MSVC) and CMake.
 | **Primitives** | `Solid::cube`, `Solid::sphere`, `Solid::cylinder`, `Solid::cone`, `Solid::torus`, `Solid::half_space` |
 | **Curves** | `Edge::line`, `Edge::arc_3pts`, `Edge::circle`, `Edge::polygon`, `Edge::helix`, `Edge::bspline` |
 | **Surfacing** | `Solid::extrude`, `Solid::sweep`, `Solid::loft`, `Solid::bspline` |
-| **Editing** | `Solid::shell`, `Solid::fillet_edges`, `Solid::chamfer_edges`, `Solid::clean` |
+| **Editing** | `Solid::shell`, `Solid::fillet_edges`, `Solid::fillet_selected_edges`, `Solid::chamfer_edges`, `Solid::chamfer_selected_edges`, `Solid::clean` |
 | **Queries** | `Solid::volume`, `Solid::area`, `Solid::center`, `Solid::inertia`, `Solid::distance`, `Solid::bounding_box`, `Solid::contains` |
 | **Topology** | `Solid::iter_face`, `Solid::iter_edge`, `Face::iter_edge`, `Face::project`, `Edge::project` |
 | **Identity / history** | `Solid::id`, `Face::id`, `Edge::id`, `Solid::iter_history` |
@@ -142,6 +142,34 @@ C++17 compiler (GCC, Clang, or MSVC) and CMake.
 - **`source`**: Build OCCT from upstream sources with CMake instead of
   downloading a prebuilt tarball. Off by default — most users use the
   prebuilt path. Enable it for targets that have no published prebuilt.
+
+## Typed edge selection
+
+Selected fillets and chamfers accept one bounded `EdgeSelector`
+instead of requiring callers to retain borrowed topology objects:
+
+```rust,no_run
+use cadrum::{DVec3, EdgeSelector, Solid};
+
+fn main() -> Result<(), cadrum::Error> {
+	let box_solid = Solid::cube(DVec3::ZERO, DVec3::new(40.0, 30.0, 20.0));
+	let _rounded_posts = box_solid
+		.fillet_selected_edges(2.0, EdgeSelector::parallel_to(DVec3::Z))?;
+	let _beveled_top = box_solid
+		.chamfer_selected_edges(1.0, EdgeSelector::at_maximum(DVec3::Z))?;
+	Ok(())
+}
+```
+
+`parallel_to` matches straight edges parallel or antiparallel to a unit axis
+within `1e-9` radians. `at_minimum` and `at_maximum` match the first stable
+cluster of edge linear-center projections at an oriented-axis extreme, using
+CadQuery's absolute `1e-4` tolerance in the current model units. Construct an
+`EdgeSelector::AtExtreme` explicitly when a different positive absolute
+tolerance is required. Selection preserves kernel topology order and a zero
+match is `Error::EdgeSelectionFailed`; by contrast, the iterator-based
+`fillet_edges` and `chamfer_edges` APIs retain their documented empty-input
+no-op behavior.
 
 ## Examples
 
@@ -1030,7 +1058,8 @@ let v = s.volume();
 
 Every fallible operation returns `Result<T, Error>` with `Error`
 enumerating the failure modes (`Error::SweepFailed`,
-`Error::FilletFailed`, `Error::InvalidEdge`, etc.). Variants that need
+`Error::FilletFailed`, `Error::EdgeSelectionFailed`, `Error::InvalidEdge`,
+etc.). Variants that need
 detail carry a `String` payload identifying which constructor or parameter
 combination tripped OCCT, so panics are reserved for true logic bugs.
 

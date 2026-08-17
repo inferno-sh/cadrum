@@ -645,7 +645,9 @@ pub trait SolidStruct: Sized + Clone + Transform {
 		Self::Edge: 'a;
 
 	/// Round edges selected by a typed geometric predicate in deterministic
-	/// kernel topology order. A selector matching no edges is an error.
+	/// kernel topology order. Parallel selection accepts line edges only;
+	/// extrema use edge linear centers. Invalid selectors and zero matches return
+	/// [`Error::EdgeSelectionFailed`].
 	fn fillet_selected_edges(&self, radius: f64, selector: EdgeSelector) -> Result<Self, Error>;
 
 	/// Chamfer (bevel) the given edges of `self` with a uniform distance.
@@ -661,7 +663,8 @@ pub trait SolidStruct: Sized + Clone + Transform {
 	where
 		Self::Edge: 'a;
 
-	/// Chamfer edges selected in deterministic topology order; zero matches fail.
+	/// Chamfer typed-selected edges in deterministic topology order. Invalid
+	/// selectors and zero matches return [`Error::EdgeSelectionFailed`].
 	fn chamfer_selected_edges(&self, distance: f64, selector: EdgeSelector) -> Result<Self, Error>;
 
 	// --- Sweep ---

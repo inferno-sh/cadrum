@@ -40,6 +40,22 @@ changes until `1.0`.
 
 #### Changes
 
+- **Typed selected-edge finishing.** `EdgeSelector::parallel_to`,
+  `EdgeSelector::at_minimum`, and `EdgeSelector::at_maximum` drive
+  `Solid::fillet_selected_edges` and `Solid::chamfer_selected_edges` in stable
+  topology order. Parallel selection is restricted to exact line edges;
+  extrema use edge linear centers and CadQuery-compatible first-cluster
+  semantics. Invalid selectors and zero matches return the new
+  `Error::EdgeSelectionFailed` instead of widening to all edges or succeeding
+  as a no-op.
+- **Source-faithful sweep controls.** `SweepTransition` exposes transformed,
+  round, and right corner handling; corrected-Frenet orientation is available
+  through `ProfileOrient`; exact ellipse and closed-circle spines are retained;
+  and `Edge::bspline_with_tolerance` accepts an explicit positive source-model
+  interpolation tolerance.
+- **Exact geometry queries.** `Solid::distance` returns the minimum distance
+  between two solids and `Face::center` returns the exact surface center used
+  by directional selection.
 - **`Mesh.normals`.** One unit outward normal per vertex, evaluated on the B-rep
   surface rather than averaged from the triangles, and emitted as glTF `NORMAL`.
   Faces never share vertices, so each is its own smoothing group. (#243, #244)
