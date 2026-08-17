@@ -6,6 +6,9 @@
 //! - `Fixed`: profile is parallel-transported without rotating. Cross-sections
 //!   stay parallel to the starting orientation. Suited for straight extrusions;
 //!   on a curved spine the profile drifts off the tangent and the result breaks.
+//! - `Corrected`: OCCT's corrected-Frenet frame and CadQuery's default
+//!   `isFrenet=false` behavior. Suited for mixed line/arc paths and general
+//!   curves where a stable frame should cross zero-curvature regions.
 //! - `Torsion`: profile follows the spine's principal normal (raw Frenet–Serret
 //!   frame). Suited for constant-curvature/torsion curves like helices and for
 //!   3D free curves where the natural twist should carry into the profile.

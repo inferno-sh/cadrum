@@ -29,6 +29,7 @@ fn encode_orient(orient: ProfileOrient) -> (u32, f64, f64, f64, cxx::UniquePtr<c
 			}
 			(3u32, 0.0, 0.0, 0.0)
 		}
+		ProfileOrient::Corrected => (4u32, 0.0, 0.0, 0.0),
 	};
 	(kind, ux, uy, uz, aux_vec)
 }

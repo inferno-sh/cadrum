@@ -199,6 +199,7 @@ pub trait Transform: Sized {
 /// | やりたいこと | 選ぶ variant |
 /// |---|---|
 /// | 直線押し出し / profile を回したくない | [`Fixed`](Self::Fixed) |
+/// | CadQuery 互換 / 混合曲率の一般的な sweep | [`Corrected`](Self::Corrected) |
 /// | ねじ・バネ・つる (helix 系) | [`Torsion`](Self::Torsion) または [`Up`](Self::Up)`(axis)` |
 /// | 道路・線路・パイプ (重力方向を保ちたい) | [`Up`](Self::Up)`(DVec3::Z)` |
 /// | 上記に当てはまらない 3D 自由曲線 | [`Torsion`](Self::Torsion) |
@@ -217,6 +218,13 @@ pub enum ProfileOrient<'a> {
 	/// - **適**: 直線 spine (押し出し)
 	/// - **不適**: 曲がる spine (profile が tangent と直交しなくなり、見た目が壊れる)
 	Fixed,
+
+	/// Profile follows OCCT's corrected-Frenet frame.
+	///
+	/// This is the default orientation used by CadQuery when `isFrenet=false`.
+	/// Unlike raw Frenet, it transports a stable frame through zero-curvature
+	/// regions and mixed line/arc spines without following every torsional turn.
+	Corrected,
 
 	/// Profile rotates following the spine's principal normal direction
 	/// (= the T-perpendicular component of `d²C/dt²`). Equivalent to OCCT's
@@ -614,7 +622,8 @@ pub trait SolidStruct: Sized + Clone + Transform {
 	///
 	/// `orient` selects how the profile is oriented along the spine. See
 	/// [`ProfileOrient`] for the trade-offs between [`Fixed`](ProfileOrient::Fixed),
-	/// [`Torsion`](ProfileOrient::Torsion), and [`Up`](ProfileOrient::Up).
+	/// [`Corrected`](ProfileOrient::Corrected), [`Torsion`](ProfileOrient::Torsion),
+	/// and [`Up`](ProfileOrient::Up).
 	// 戻り型は単一 `Self` 固定。MakePipeShell が compound を返すことは closed
 	// face 入力に対しては実質起きないため、`Vec<Self>` に拡張する手間を省いた。
 	// 想定外ケースに当たったら `Solid::new` の debug_assert で気付ける。

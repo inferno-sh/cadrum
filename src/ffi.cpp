@@ -1909,6 +1909,11 @@ std::unique_ptr<TopoDS_Shape> make_pipe_shell(
                 shell.SetMode(auxMaker.Wire(), false);
                 break;
             }
+            case 4: {
+                // Corrected: CadQuery's default isFrenet=false trihedron.
+                shell.SetMode(false);
+                break;
+            }
             default: {
                 shell.SetMode(true);
                 break;

@@ -37,3 +37,22 @@ fn c0_corner_transition_modes_produce_distinct_solids() {
 	assert_ne!(transformed.bounding_box(), round.bounding_box());
 	assert_eq!(SweepTransition::default(), SweepTransition::Transformed);
 }
+
+#[test]
+fn corrected_frenet_right_transition_sweeps_a_mixed_line_arc_spine() {
+	let start = DVec3::new(0.0, 0.0, 44.0);
+	let line_end = DVec3::new(0.0, 0.0, 155.0);
+	let first_arc_end = DVec3::new(105.0, 0.0, 230.0);
+	let spine = [Edge::line(start, line_end).expect("line spine edge"), Edge::arc_3pts(line_end, DVec3::new(26.0, 0.0, 246.0), first_arc_end).expect("first arc spine edge"), Edge::arc_3pts(first_arc_end, DVec3::new(134.0, 0.0, 218.0), DVec3::new(148.0, 0.0, 182.0)).expect("second arc spine edge")];
+	let profile = [Edge::circle(7.0, DVec3::Z).expect("circle profile").translate(start)];
+
+	let solid = Solid::sweep_with_transition(&profile, &spine, ProfileOrient::Corrected, SweepTransition::Right).expect("corrected-Frenet sweep");
+	let [minimum, maximum] = solid.bounding_box();
+
+	assert!(solid.volume().is_finite() && solid.volume() > 31_000.0);
+	assert!(minimum.x < -6.0 && minimum.z < 45.0);
+	assert!(maximum.x > 148.0 && maximum.z > 246.0);
+	let mesh = Solid::mesh([&solid], Default::default()).expect("mixed-spine sweep mesh");
+	assert!(!mesh.vertices.is_empty());
+	assert!(!mesh.indices.is_empty());
+}

@@ -359,6 +359,7 @@ std::unique_ptr<TopoDS_Shape> make_extrude(
 //   1 = Torsion — raw Frenet trihedron (helices, springs)
 //   2 = Up      — keep `(ux, uy, uz)` as the constant binormal direction
 //   3 = Auxiliary — use `aux_spine_edges` as auxiliary spine for twist control
+//   4 = Corrected — corrected-Frenet trihedron (CadQuery's isFrenet=false)
 // Any other value falls back to Torsion.
 // `transition` selects how C0 spine corners are joined:
 //   0 = Transformed, 1 = RoundCorner, 2 = RightCorner
