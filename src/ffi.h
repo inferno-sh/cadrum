@@ -114,6 +114,13 @@ std::unique_ptr<TopoDS_Shape> builder_cells(
     rust::Slice<const int64_t> clauses,
     rust::Vec<uint64_t>& out_history);
 
+// Subtract one solid from another with BRepAlgoAPI_Cut. Returns nullptr when
+// the operation fails or does not produce exactly one solid.
+std::unique_ptr<TopoDS_Shape> builder_cut(
+    const TopoDS_Shape& base,
+    const TopoDS_Shape& tool,
+    rust::Vec<uint64_t>& out_history);
+
 // Unify shared faces / collinear edges via ShapeUpgrade_UnifySameDomain.
 // `out_history` encodes how each old face maps onto the unified result.
 // Rust uses it to remap the colormap when the `color` feature is enabled.

@@ -207,6 +207,9 @@ impl Solid {
 	pub fn clean(&self) -> Result<crate::Solid, Error> {
 		<Self as crate::traits::SolidStruct>::clean(self)
 	}
+	pub fn cut(&self, tool: &crate::Solid) -> Result<crate::Solid, Error> {
+		<Self as crate::traits::SolidStruct>::cut(self, tool)
+	}
 	pub fn extrude<'a>(profile: impl IntoIterator<Item = &'a Edge>, dir: DVec3) -> Result<crate::Solid, Error> {
 		<Self as crate::traits::SolidStruct>::extrude(profile, dir)
 	}

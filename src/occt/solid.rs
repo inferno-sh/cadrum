@@ -514,6 +514,35 @@ impl SolidStruct for Solid {
 		))
 	}
 
+	fn cut(&self, tool: &Self) -> Result<Self, Error> {
+		let mut history = Vec::new();
+		let inner = ffi::builder_cut(&self.inner, &tool.inner, &mut history);
+		if inner.is_null() || !ffi::shape_is_solid(&inner) {
+			return Err(Error::BooleanOperationFailed);
+		}
+
+		#[cfg(feature = "color")]
+		let colormap = {
+			let mut colormap = std::collections::HashMap::new();
+			for pair in history.chunks_exact(2) {
+				if let Some(&color) = self.colormap.get(&pair[1]).or_else(|| tool.colormap.get(&pair[1])) {
+					colormap.entry(pair[0]).or_insert(color);
+				}
+			}
+			if let Some(&color) = self.colormap.get(&self.id()) {
+				colormap.insert(ffi::shape_tshape_id(&inner), color);
+			}
+			colormap
+		};
+
+		Ok(Solid::new(
+			inner,
+			#[cfg(feature = "color")]
+			colormap,
+			history,
+		))
+	}
+
 	// ==================== Boolean primitive ====================
 
 	fn boolean<'a>(solids: impl IntoIterator<Item = &'a Self>, clauses: impl IntoIterator<Item = i64>) -> Boolean<Self>

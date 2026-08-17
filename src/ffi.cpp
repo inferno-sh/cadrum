@@ -61,9 +61,13 @@
 #include <BRepPrimAPI_MakeTorus.hxx>
 
 // --- Boolean operations & shape cleanup ---
+#include <BRepAlgoAPI_Cut.hxx>
 #include <BOPAlgo_CellsBuilder.hxx>
+#include <BOPAlgo_GlueEnum.hxx>
 #include <ShapeUpgrade_UnifySameDomain.hxx>
 #include <ShapeUpgrade_ShapeDivideClosed.hxx>
+#include <ShapeBuild_ReShape.hxx>
+#include <ShapeFix_Shape.hxx>
 #include <BRepTools_History.hxx>
 
 // --- Sweep / pipe / loft ---
@@ -659,6 +663,103 @@ std::unique_ptr<TopoDS_Shape> builder_cells(
         relay_from_pair(cb.Shape(), copier.Shape(), relay2);
         relay_into_history(&relay1, &relay2, out_history);
         return shape;
+    } catch (const Standard_Failure&) {
+        return nullptr;
+    }
+}
+
+std::unique_ptr<TopoDS_Shape> builder_cut(
+    const TopoDS_Shape& base,
+    const TopoDS_Shape& tool,
+    rust::Vec<uint64_t>& out_history)
+{
+    try {
+        NCollection_List<TopoDS_Shape> arguments, tools;
+        arguments.Append(base);
+        tools.Append(tool);
+
+        BRepAlgoAPI_Cut cut;
+        cut.SetArguments(arguments);
+        cut.SetTools(tools);
+        cut.SetNonDestructive(true);
+        cut.SetGlue(BOPAlgo_GlueShift);
+        cut.Build();
+        if (!cut.IsDone() || cut.HasErrors() || cut.Shape().IsNull()) {
+            return nullptr;
+        }
+
+        std::unordered_map<uint64_t, uint64_t> cut_to_source;
+        relay_from_builder(cut, base, cut_to_source);
+        relay_from_builder(cut, tool, cut_to_source);
+
+        const TopoDS_Shape& pre_shape = cut.Shape();
+        BRepBuilderAPI_Copy copier(pre_shape, true, false);
+        if (!copier.IsDone() || copier.Shape().IsNull()) return nullptr;
+        const TopoDS_Shape copied_shape = copier.Shape();
+		std::unordered_map<uint64_t, uint64_t> copy_to_cut;
+		relay_from_pair(pre_shape, copied_shape, copy_to_cut);
+
+		std::unordered_map<uint64_t, uint64_t> copy_to_source;
+		for (const auto& pair : copy_to_cut) {
+			auto source = cut_to_source.find(pair.second);
+			if (source != cut_to_source.end()) {
+				copy_to_source[pair.first] = source->second;
+			}
+		}
+
+		ShapeFix_Shape fixer(copied_shape);
+		fixer.SetPrecision(Precision::Confusion());
+		fixer.Perform();
+		if (fixer.Shape().IsNull()) return nullptr;
+		TopoDS_Shape post_shape = fixer.Shape();
+
+		std::unordered_set<uint64_t> post_faces;
+		for (TopExp_Explorer ex(post_shape, TopAbs_FACE); ex.More(); ex.Next()) {
+			post_faces.insert(reinterpret_cast<uint64_t>(ex.Current().TShape().get()));
+		}
+
+		std::unordered_map<uint64_t, uint64_t> post_to_source;
+		const Handle(ShapeBuild_ReShape) context = fixer.Context();
+		for (TopExp_Explorer ex(copied_shape, TopAbs_FACE); ex.More(); ex.Next()) {
+			const TopoDS_Shape& copied_face = ex.Current();
+			const uint64_t copied_id = reinterpret_cast<uint64_t>(copied_face.TShape().get());
+			auto source = copy_to_source.find(copied_id);
+			if (source == copy_to_source.end()) continue;
+
+			TopoDS_Shape replacement;
+			const int status = context.IsNull() ? 0 : context->Status(copied_face, replacement, true);
+			if (status < 0) continue;
+			if (status == 0) {
+				if (post_faces.count(copied_id) != 0) {
+					post_to_source[copied_id] = source->second;
+				}
+				continue;
+			}
+			if (replacement.ShapeType() == TopAbs_FACE) {
+				const uint64_t replacement_id = reinterpret_cast<uint64_t>(replacement.TShape().get());
+				if (post_faces.count(replacement_id) != 0) {
+					post_to_source[replacement_id] = source->second;
+				}
+				continue;
+			}
+			for (TopExp_Explorer replacement_ex(replacement, TopAbs_FACE); replacement_ex.More(); replacement_ex.Next()) {
+				const uint64_t replacement_id = reinterpret_cast<uint64_t>(replacement_ex.Current().TShape().get());
+				if (post_faces.count(replacement_id) != 0) {
+					post_to_source[replacement_id] = source->second;
+				}
+			}
+		}
+
+        TopoDS_Shape result;
+        int solid_count = 0;
+        for (TopExp_Explorer ex(post_shape, TopAbs_SOLID); ex.More(); ex.Next()) {
+            if (++solid_count > 1) return nullptr;
+            result = ex.Current();
+        }
+        if (solid_count != 1 || result.IsNull()) return nullptr;
+
+		relay_into_history(&post_to_source, nullptr, out_history);
+		return std::make_unique<TopoDS_Shape>(result);
     } catch (const Standard_Failure&) {
         return nullptr;
     }

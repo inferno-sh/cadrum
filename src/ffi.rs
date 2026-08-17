@@ -79,6 +79,9 @@ mod ffi_bridge {
 		// `out_history` の形式は builder_boolean と同じ。
 		fn builder_cells(solids: &CxxVector<TopoDS_Shape>, clauses: &[i64], out_history: &mut Vec<u64>) -> UniquePtr<TopoDS_Shape>;
 
+		// Dedicated two-solid subtraction via BRepAlgoAPI_Cut.
+		fn builder_cut(base: &TopoDS_Shape, tool: &TopoDS_Shape, out_history: &mut Vec<u64>) -> UniquePtr<TopoDS_Shape>;
+
 		// Unify shared faces. `out_history` receives flat [new_id, old_id, ...]
 		// pairs (same layout as `builder_boolean`), used by Solid::clean to populate
 		// `Solid::history` and remap the colormap when color is enabled.
