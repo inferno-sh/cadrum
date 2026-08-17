@@ -91,6 +91,8 @@ mod ffi_bridge {
 		// pairs (same layout as builder_cells) → Solid::history + colormap remap.
 		fn builder_thick_solid(solid: &TopoDS_Shape, open_faces: &CxxVector<TopoDS_Face>, thickness: f64, out_history: &mut Vec<u64>) -> UniquePtr<TopoDS_Shape>;
 		fn builder_fillet(solid: &TopoDS_Shape, edges: &CxxVector<TopoDS_Edge>, radius: f64, out_history: &mut Vec<u64>) -> UniquePtr<TopoDS_Shape>;
+		fn edge_is_line_parallel_to(edge: &TopoDS_Edge, ax: f64, ay: f64, az: f64, angular_tolerance: f64) -> bool;
+		fn edge_center_of_mass(edge: &TopoDS_Edge, x: &mut f64, y: &mut f64, z: &mut f64) -> bool;
 		fn builder_chamfer(solid: &TopoDS_Shape, edges: &CxxVector<TopoDS_Edge>, distance: f64, out_history: &mut Vec<u64>) -> UniquePtr<TopoDS_Shape>;
 
 		// ==================== Transforms (solid → solid, no history) ====================

@@ -264,6 +264,40 @@ pub enum SweepTransition {
 	Right,
 }
 
+/// Typed topological edge selection for local solid operations.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum EdgeSelector {
+	/// Select exact line edges parallel or antiparallel to a unit axis.
+	ParallelToAxis { axis: DVec3, angular_tolerance: f64 },
+	/// Select edges at an axis-projected linear-center extreme. Tolerance is
+	/// absolute in the current model's units.
+	AtExtreme { axis: DVec3, extreme: AxisExtreme, linear_tolerance: f64 },
+}
+
+/// Which end of an axis projection an extreme selector keeps.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AxisExtreme {
+	Minimum,
+	Maximum,
+}
+
+impl EdgeSelector {
+	/// Select exact line edges parallel to `axis` within `1e-9` radians.
+	pub fn parallel_to(axis: DVec3) -> Self {
+		Self::ParallelToAxis { axis, angular_tolerance: 1.0e-9 }
+	}
+
+	/// Match CadQuery's `<axis` selector with its `1e-4` model-unit tolerance.
+	pub fn at_minimum(axis: DVec3) -> Self {
+		Self::AtExtreme { axis, extreme: AxisExtreme::Minimum, linear_tolerance: 1.0e-4 }
+	}
+
+	/// Match CadQuery's `>axis` selector with its `1e-4` model-unit tolerance.
+	pub fn at_maximum(axis: DVec3) -> Self {
+		Self::AtExtreme { axis, extreme: AxisExtreme::Maximum, linear_tolerance: 1.0e-4 }
+	}
+}
+
 // ==================== BSplineEnd ====================
 
 /// End-condition selector for [`EdgeStruct::bspline`].
@@ -610,6 +644,10 @@ pub trait SolidStruct: Sized + Clone + Transform {
 	where
 		Self::Edge: 'a;
 
+	/// Round edges selected by a typed geometric predicate in deterministic
+	/// kernel topology order. A selector matching no edges is an error.
+	fn fillet_selected_edges(&self, radius: f64, selector: EdgeSelector) -> Result<Self, Error>;
+
 	/// Chamfer (bevel) the given edges of `self` with a uniform distance.
 	/// Edges are typically selected via `self.iter_edge().filter(...)`.
 	///
@@ -622,6 +660,9 @@ pub trait SolidStruct: Sized + Clone + Transform {
 	fn chamfer_edges<'a>(&self, distance: f64, edges: impl IntoIterator<Item = &'a Self::Edge>) -> Result<Self, Error>
 	where
 		Self::Edge: 'a;
+
+	/// Chamfer edges selected in deterministic topology order; zero matches fail.
+	fn chamfer_selected_edges(&self, distance: f64, selector: EdgeSelector) -> Result<Self, Error>;
 
 	// --- Sweep ---
 	/// Sweep a closed profile wire (= ordered edge list) along a spine wire

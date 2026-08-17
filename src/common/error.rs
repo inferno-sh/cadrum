@@ -56,6 +56,9 @@ pub enum Error {
 	/// the selected edge chain, or an edge not belonging to `self` was passed.
 	FilletFailed,
 
+	/// A typed edge selector is invalid or matched no edges.
+	EdgeSelectionFailed(String),
+
 	/// Chamfer (`Solid::chamfer_edges` via `BRepFilletAPI_MakeChamfer`) failed:
 	/// distance too large for the local geometry, tangent discontinuity along
 	/// the selected edge chain, or an edge not belonging to `self` was passed.
@@ -125,6 +128,7 @@ impl std::fmt::Display for Error {
 			Error::SweepFailed => write!(f, "Sweep failed"),
 			Error::ShellFailed => write!(f, "Shell failed"),
 			Error::FilletFailed => write!(f, "Fillet failed"),
+			Error::EdgeSelectionFailed(msg) => write!(f, "Edge selection failed: {}", msg),
 			Error::ChamferFailed => write!(f, "Chamfer failed"),
 			Error::LoftFailed(msg) => write!(f, "Loft failed: {}", msg),
 			Error::SewFailed(msg) => write!(f, "Sew failed: {}", msg),

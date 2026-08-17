@@ -24,6 +24,7 @@
 #include <gp_Ax2.hxx>
 #include <gp_Circ.hxx>
 #include <gp_Elips.hxx>
+#include <gp_Lin.hxx>
 #include <gp_Pln.hxx>
 #include <gp_Trsf.hxx>
 #include <gp_Vec.hxx>
@@ -1849,6 +1850,7 @@ std::unique_ptr<TopoDS_Shape> builder_fillet(
     rust::Vec<uint64_t>& out_history)
 {
     try {
+        if (!std::isfinite(radius) || radius <= 0.0) return nullptr;
         if (edges.empty()) {
             // No-op: shallow copy; every face is identity.
             std::unordered_map<uint64_t, uint64_t> relay;
@@ -1882,6 +1884,49 @@ std::unique_ptr<TopoDS_Shape> builder_fillet(
     }
 }
 
+bool edge_is_line_parallel_to(
+    const TopoDS_Edge& edge,
+    double ax, double ay, double az,
+    double angular_tolerance)
+{
+    try {
+        if (edge.IsNull() || !std::isfinite(ax) || !std::isfinite(ay) ||
+            !std::isfinite(az) || !std::isfinite(angular_tolerance) ||
+            angular_tolerance <= 0.0 || angular_tolerance >= M_PI_2) return false;
+        const double axis_length = std::sqrt(ax * ax + ay * ay + az * az);
+        if (std::abs(axis_length - 1.0) > 1.0e-9) return false;
+
+        BRepAdaptor_Curve curve(edge);
+        if (curve.GetType() != GeomAbs_Line) return false;
+        const gp_Dir axis(ax, ay, az);
+        const gp_Dir direction = curve.Line().Direction();
+        return std::abs(direction.Dot(axis)) >= std::cos(angular_tolerance);
+    } catch (const Standard_Failure&) {
+        return false;
+    }
+}
+
+bool edge_center_of_mass(
+    const TopoDS_Edge& edge,
+    double& x, double& y, double& z)
+{
+    try {
+        if (edge.IsNull()) return false;
+        GProp_GProps properties;
+        BRepGProp::LinearProperties(edge, properties);
+        if (!std::isfinite(properties.Mass()) || properties.Mass() <= 0.0) return false;
+        const gp_Pnt center = properties.CentreOfMass();
+        if (!std::isfinite(center.X()) || !std::isfinite(center.Y()) ||
+            !std::isfinite(center.Z())) return false;
+        x = center.X();
+        y = center.Y();
+        z = center.Z();
+        return true;
+    } catch (const Standard_Failure&) {
+        return false;
+    }
+}
+
 std::unique_ptr<TopoDS_Shape> builder_chamfer(
     const TopoDS_Shape& solid,
     const std::vector<TopoDS_Edge>& edges,
@@ -1889,6 +1934,7 @@ std::unique_ptr<TopoDS_Shape> builder_chamfer(
     rust::Vec<uint64_t>& out_history)
 {
     try {
+        if (!std::isfinite(distance) || distance <= 0.0) return nullptr;
         if (edges.empty()) {
             // No-op: shallow copy; every face is identity.
             std::unordered_map<uint64_t, uint64_t> relay;

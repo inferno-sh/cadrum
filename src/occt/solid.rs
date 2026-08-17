@@ -4,7 +4,7 @@ use super::face::Face;
 use super::ffi;
 use crate::common::boolean::Boolean;
 use crate::common::error::Error;
-use crate::traits::{ProfileOrient, SolidStruct, SweepTransition, Transform};
+use crate::traits::{AxisExtreme, EdgeSelector, ProfileOrient, SolidStruct, SweepTransition, Transform};
 use glam::DVec3;
 use std::sync::{Mutex, OnceLock};
 
@@ -32,6 +32,30 @@ fn encode_orient(orient: ProfileOrient) -> (u32, f64, f64, f64, cxx::UniquePtr<c
 		ProfileOrient::Corrected => (4u32, 0.0, 0.0, 0.0),
 	};
 	(kind, ux, uy, uz, aux_vec)
+}
+
+fn extreme_cluster_members(projections: &[f64], extreme: AxisExtreme, tolerance: f64) -> Vec<bool> {
+	let mut sorted = projections.iter().copied().enumerate().collect::<Vec<_>>();
+	sorted.sort_by(|(a_index, a), (b_index, b)| a.total_cmp(b).then(a_index.cmp(b_index)));
+	let mut members = vec![false; projections.len()];
+	let Some((_, mut cluster_seed)) = sorted.first().copied() else {
+		return members;
+	};
+	let mut cluster_starts = vec![0];
+	for (index, (_, projection)) in sorted.iter().copied().enumerate().skip(1) {
+		if projection > cluster_seed + tolerance {
+			cluster_starts.push(index);
+			cluster_seed = projection;
+		}
+	}
+	let (start, end) = match extreme {
+		AxisExtreme::Minimum => (0, cluster_starts.get(1).copied().unwrap_or(sorted.len())),
+		AxisExtreme::Maximum => (*cluster_starts.last().expect("non-empty projection clusters"), sorted.len()),
+	};
+	for (original_index, _) in &sorted[start..end] {
+		members[*original_index] = true;
+	}
+	members
 }
 
 #[cfg(feature = "color")]
@@ -150,6 +174,46 @@ impl Solid {
 	/// Returns `true` if this solid wraps a null shape.
 	pub fn is_null(&self) -> bool {
 		ffi::shape_is_null(&self.inner)
+	}
+
+	fn select_edges(&self, selector: EdgeSelector) -> Result<Vec<&Edge>, Error> {
+		let axis = match selector {
+			EdgeSelector::ParallelToAxis { axis, .. } | EdgeSelector::AtExtreme { axis, .. } => axis,
+		};
+		if !axis.is_finite() || (axis.length() - 1.0).abs() > 1.0e-9 {
+			return Err(Error::EdgeSelectionFailed(format!("selector axis must be finite and unit length, got {axis:?}")));
+		}
+
+		let selected = match selector {
+			EdgeSelector::ParallelToAxis { angular_tolerance, .. } => {
+				if !angular_tolerance.is_finite() || angular_tolerance <= 0.0 || angular_tolerance >= std::f64::consts::FRAC_PI_2 {
+					return Err(Error::EdgeSelectionFailed(format!("angular tolerance must be finite and in (0, pi/2), got {angular_tolerance}")));
+				}
+				self.iter_edge().filter(|edge| ffi::edge_is_line_parallel_to(&edge.inner, axis.x, axis.y, axis.z, angular_tolerance)).collect::<Vec<_>>()
+			}
+			EdgeSelector::AtExtreme { extreme, linear_tolerance, .. } => {
+				if !linear_tolerance.is_finite() || linear_tolerance <= 0.0 {
+					return Err(Error::EdgeSelectionFailed(format!("linear tolerance must be finite and positive, got {linear_tolerance}")));
+				}
+				let mut projected = Vec::new();
+				for edge in self.iter_edge() {
+					let (mut x, mut y, mut z) = (0.0, 0.0, 0.0);
+					if !ffi::edge_center_of_mass(&edge.inner, &mut x, &mut y, &mut z) {
+						return Err(Error::EdgeSelectionFailed("an edge has no finite linear center of mass".into()));
+					}
+					projected.push((edge, DVec3::new(x, y, z).dot(axis)));
+				}
+				if projected.is_empty() {
+					return Err(Error::EdgeSelectionFailed("solid has no edges".into()));
+				}
+				let members = extreme_cluster_members(&projected.iter().map(|(_, position)| *position).collect::<Vec<_>>(), extreme, linear_tolerance);
+				projected.into_iter().zip(members).filter_map(|((edge, _), selected)| selected.then_some(edge)).collect()
+			}
+		};
+		if selected.is_empty() {
+			return Err(Error::EdgeSelectionFailed("selector matched no edges".into()));
+		}
+		Ok(selected)
 	}
 }
 
@@ -299,6 +363,9 @@ impl SolidStruct for Solid {
 	// ==================== Fillet / Chamfer ====================
 
 	fn fillet_edges<'a>(&self, radius: f64, edges: impl IntoIterator<Item = &'a Edge>) -> Result<Self, Error> {
+		if !radius.is_finite() || radius <= 0.0 {
+			return Err(Error::FilletFailed);
+		}
 		let mut edge_vec = ffi::edge_vec_new();
 		for e in edges {
 			ffi::edge_vec_push(edge_vec.pin_mut(), &e.inner);
@@ -318,7 +385,17 @@ impl SolidStruct for Solid {
 		))
 	}
 
+	fn fillet_selected_edges(&self, radius: f64, selector: EdgeSelector) -> Result<Self, Error> {
+		if !radius.is_finite() || radius <= 0.0 {
+			return Err(Error::FilletFailed);
+		}
+		self.fillet_edges(radius, self.select_edges(selector)?)
+	}
+
 	fn chamfer_edges<'a>(&self, distance: f64, edges: impl IntoIterator<Item = &'a Edge>) -> Result<Self, Error> {
+		if !distance.is_finite() || distance <= 0.0 {
+			return Err(Error::ChamferFailed);
+		}
 		let mut edge_vec = ffi::edge_vec_new();
 		for e in edges {
 			ffi::edge_vec_push(edge_vec.pin_mut(), &e.inner);
@@ -336,6 +413,13 @@ impl SolidStruct for Solid {
 			colormap,
 			history,
 		))
+	}
+
+	fn chamfer_selected_edges(&self, distance: f64, selector: EdgeSelector) -> Result<Self, Error> {
+		if !distance.is_finite() || distance <= 0.0 {
+			return Err(Error::ChamferFailed);
+		}
+		self.chamfer_edges(distance, self.select_edges(selector)?)
 	}
 
 	// ==================== Sweep ====================
@@ -794,5 +878,17 @@ impl Clone for Solid {
 			colormap,
 			Default::default(),
 		)
+	}
+}
+
+#[cfg(test)]
+mod edge_selector_tests {
+	use super::*;
+
+	#[test]
+	fn extreme_clusters_use_the_first_projection_as_each_cluster_anchor() {
+		let projections = [0.0, 0.09, 0.18];
+		assert_eq!(extreme_cluster_members(&projections, AxisExtreme::Minimum, 0.1), [true, true, false]);
+		assert_eq!(extreme_cluster_members(&projections, AxisExtreme::Maximum, 0.1), [false, false, true]);
 	}
 }

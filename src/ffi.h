@@ -154,6 +154,17 @@ std::unique_ptr<TopoDS_Shape> builder_fillet(
     double radius,
     rust::Vec<uint64_t>& out_history);
 
+// True only for exact line edges parallel or antiparallel to the unit axis.
+bool edge_is_line_parallel_to(
+    const TopoDS_Edge& edge,
+    double ax, double ay, double az,
+    double angular_tolerance);
+
+// Exact linear center of mass used by CadQuery's extreme edge selector.
+bool edge_center_of_mass(
+    const TopoDS_Edge& edge,
+    double& x, double& y, double& z);
+
 // Chamfer (symmetric bevel) the given edges of `solid` with a uniform
 // distance using BRepFilletAPI_MakeChamfer. Empty `edges` is a no-op
 // (returns a shallow copy of `solid`). Returns nullptr on OCCT failure
